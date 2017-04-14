@@ -20,9 +20,12 @@ int  io_load_eflags(void);
 void io_store_eflags(int eflags);
 void load_gdtr(int limit, int addr);
 void load_idtr(int limit, int addr);
+int load_cr0(void);
+void store_cr0(int cr0);
 void asm_inthandler21(void);
 void asm_inthandler27(void);
 void asm_inthandler2c(void);
+unsigned int memtest_sub(unsigned int start, unsigned int end);
 
 // graphic.c
 void init_palette(void);
@@ -110,3 +113,28 @@ void fifo8_init(struct FIFO8 *fifo, int size, unsigned char *buf);
 int fifo8_put(struct FIFO8 *fifo, unsigned char data);
 int fifo8_get(struct FIFO8 *fifo);
 int fifo8_status(struct FIFO8 *fifo);
+
+// keybord.c
+#define PORT_KEY_DATA			  0x0060
+#define PORT_KEY_STATUS			  0x0064
+#define PORT_KEY_COMMAND		  0x0064
+#define KEY_STATUS_SEND_NOTREAD   0x02
+#define KEY_COMMAND_WRITE_MODE    0x60
+#define KBC_MODE                  0x47
+extern struct FIFO8 keyboard_fifo;
+void inthandler21(int *esp);
+void wait_KBC_sendready(void);
+void init_keyboard(void);
+
+// mouse.c
+struct MOUSE_DECODER {
+    unsigned char phase;
+    unsigned char buffer[3];
+    int x;
+    int y;
+    int button;
+};
+void inthandler2c(int *esp);
+void enable_mouse(struct MOUSE_DECODER *mouse_decoder);
+int mouse_decode(struct MOUSE_DECODER *mouse_decoder, unsigned char data);
+extern struct FIFO8 mouse_fifo;

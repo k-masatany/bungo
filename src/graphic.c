@@ -103,36 +103,36 @@ void putfonts8_ascii(char *vram, int xsize, int x, int y, char c, unsigned char 
 }
 
 void init_mouse_cursor8(char *mouse, char bc) {
-    static char cursor[16][16] = {
-        "**              ",
-		"*.*             ",
-		"*..*            ",
-		"*...*           ",
-		"*....*          ",
-		"*.....*         ",
-		"*......*        ",
-		"*.......*       ",
-		"*.....****      ",
-		"*..*..*         ",
-        "*.**..*         ",
-        "**  *..*        ",
-        "*   *..*        ",
-        "     *..*       ",
-        "     *..*       ",
-        "      **        "
+    static char cursor[16][10] = {
+        "**        ",
+		"*.*       ",
+		"*..*      ",
+		"*...*     ",
+		"*....*    ",
+		"*.....*   ",
+		"*......*  ",
+		"*.......* ",
+		"*.....****",
+		"*..*..*   ",
+        "*.**..*   ",
+        "**  *..*  ",
+        "*   *..*  ",
+        "     *..* ",
+        "     *..* ",
+        "      **  "
     };
     int x, y;
 
     for (y = 0; y < 16; y++) {
-        for (x = 0; x < 16; x++) {
+        for (x = 0; x < 10; x++) {
             if (cursor[y][x] == '*') {
-                mouse[y * 16 + x] = COL8_000000;
+                mouse[y * 10 + x] = COL8_000000;
             }
             if (cursor[y][x] == '.') {
-				mouse[y * 16 + x] = COL8_FFFFFF;
+				mouse[y * 10 + x] = COL8_FFFFFF;
 			}
 			if (cursor[y][x] == ' ') {
-				mouse[y * 16 + x] = bc;
+				mouse[y * 10 + x] = bc;
 			}
         }
     }

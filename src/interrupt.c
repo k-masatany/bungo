@@ -1,6 +1,5 @@
 // 割り込み関係
 #include "bootpack.h"
-#include <stdio.h>
 
 // PIC(Programmable Interrupt Controller)の初期化
 void init_pic(void) {
@@ -20,31 +19,6 @@ void init_pic(void) {
 	io_out8(PIC0_IMR,  0xfb  ); // 11111011 PIC1以外は全て禁止
 	io_out8(PIC1_IMR,  0xff  ); // 11111111 全ての割り込みを受け付けない
 
-    return;
-}
-
-#define PORT_KEY_DATA	0x0060
-
-struct FIFO8 keyboard_fifo;
-void inthandler21(int *esp)
-// PS/2キーボードからの割り込み */
-{
-    unsigned char data;
-    io_out8(PIC0_OCW2, 0x61);   // IRQ-01受付完了をPICに追加
-    data = io_in8(PORT_KEY_DATA);
-    fifo8_put(&keyboard_fifo, data);
-    return;
-}
-
-struct FIFO8 mouse_fifo;
-void inthandler2c(int *esp)
-// PS/2マウスからの割り込み */
-{
-    unsigned char data;
-    io_out8(PIC1_OCW2, 0x64);	// IRQ-12受付完了をPIC1に通知
-	io_out8(PIC0_OCW2, 0x62);	// IRQ-02受付完了をPIC0に通知
-	data = io_in8(PORT_KEY_DATA);
-    fifo8_put(&mouse_fifo, data);
     return;
 }
 

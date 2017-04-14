@@ -27,12 +27,14 @@ GRAPHIC_OBJ     = $(BUILD_PATH)\graphic.obj
 DESC_TBL_OBJ    = $(BUILD_PATH)\descriptor_table.obj
 INTERRUPT_OBJ   = $(BUILD_PATH)\interrupt.obj
 FIFO_OBJ   		= $(BUILD_PATH)\fifo.obj
+KEYBORD_OBJ   	= $(BUILD_PATH)\keyboard.obj
+MOUSE_OBJ   	= $(BUILD_PATH)\mouse.obj
 BOOTPACK_OBJ    = $(BUILD_PATH)\bootpack.obj
 BOOTPACK_BIM	= $(BUILD_PATH)\bootpack.bim
 BOOTPACK_MAP	= $(BUILD_PATH)\bootpack.map
 BOOTPACK_HRB	= $(BUILD_PATH)\bootpack.hrb
 OBJS_BOOTPACK   = $(BOOTPACK_OBJ) $(NASKFUNK_OBJ) $(CHARSET_OBJ) $(GRAPHIC_OBJ) \
-            	$(DESC_TBL_OBJ) $(INTERRUPT_OBJ) $(FIFO_OBJ)
+            	$(DESC_TBL_OBJ) $(INTERRUPT_OBJ) $(FIFO_OBJ) $(KEYBORD_OBJ) $(MOUSE_OBJ)
 CHARSET_SRC		= hankaku.txt
 CHARSET_BINARY	= $(BUILD_PATH)\hankaku.bin
 CHARSET_OBJ		= $(BUILD_PATH)\hankaku.obj
