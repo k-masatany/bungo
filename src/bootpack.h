@@ -31,7 +31,7 @@ unsigned int memtest_sub(unsigned int start, unsigned int end);
 void init_palette(void);
 void set_palette(int start, int end, unsigned char *rgb);
 void boxfill8(unsigned char *vram, int xsize, unsigned char c, int x0, int y0, int x1, int y1);
-void init_screen(char *vram, int x, int y);
+void init_screen8(char *vram, int x, int y);
 void putfont8(char *vram, int xsize, int x, int y, char c, char *font);
 void putfonts8_ascii(char *vram, int xsize, int x, int y, char c, unsigned char *s);
 void init_mouse_cursor8(char *mouse, char back_color);
@@ -138,3 +138,55 @@ void inthandler2c(int *esp);
 void enable_mouse(struct MOUSE_DECODER *mouse_decoder);
 int mouse_decode(struct MOUSE_DECODER *mouse_decoder, unsigned char data);
 extern struct FIFO8 mouse_fifo;
+
+// memory.c
+#define MEMORY_MANAGER_FREES    4090    // これで約32KB
+#define MEMORY_MANAGER_ADDRESS  0x003c0000
+// 空き情報
+struct FREE_INFO {
+    unsigned int address;
+    unsigned int size;
+};
+// メモリ管理
+struct MEMORY_MANAGER {
+    int frees;
+    int max_frees;
+    int lost_size;
+    int losts;
+    struct FREE_INFO free[MEMORY_MANAGER_FREES];
+};
+unsigned int memtest(unsigned int start, unsigned int end);
+void memman_init(struct MEMORY_MANAGER *manager);
+unsigned int memman_total(struct MEMORY_MANAGER *manager);
+unsigned int memman_alloc(struct MEMORY_MANAGER *manager, unsigned int size);
+int memman_free(struct MEMORY_MANAGER *manager, unsigned int address, unsigned int size);
+unsigned int memman_alloc_4k(struct MEMORY_MANAGER *manager, unsigned int size);
+int memman_free_4k(struct MEMORY_MANAGER *manager, unsigned int address, unsigned int size);
+
+// sheet.c
+#define MAX_SHEETS      256
+struct SHEET {
+    unsigned char *buffer;      // 描画内容を記憶しているバッファへのポインタ
+    int width;                  // x方向長さ
+    int height;                 // y方向長さ
+    int x;                      // x座標
+    int y;                      // y座標
+    int color_invisible;        // 透明色番号
+    int layer;                  // レイヤー：0が下層
+    int flags;                  // 設定情報
+};
+struct SHEET_CONTROL {
+    unsigned char *vram;        // Video RAM
+    int screen_x;
+    int screen_y;
+    int top;                    // 一番上にあるSHEETの高さ
+    struct SHEET *sheets_head[MAX_SHEETS];  // 各SHEET構造体へのポインタを保存する
+    struct SHEET  sheets[MAX_SHEETS];       // 各SHEETの情報
+};
+struct SHEET_CONTROL *sheet_control_init(struct MEMORY_MANAGER *mem_manager, unsigned char *vram, int screen_x, int screen_y );
+struct SHEET *sheet_alloc(struct SHEET_CONTROL *sheet_ctl);
+void sheet_set_buffer(struct SHEET *sheet, unsigned char *buffer, int width, int height, int color_invisible);
+void sheet_updown(struct SHEET_CONTROL *sheet_ctl, struct SHEET *sheet, int layer);
+void sheet_refresh(struct SHEET_CONTROL *sheet_ctl, struct SHEET *sheet, int x0, int y0, int x1, int y1);
+void sheet_slide(struct SHEET_CONTROL *sheet_ctl, struct SHEET *sheet, int x, int y);
+void sheet_free(struct SHEET_CONTROL *sheet_ctl, struct SHEET *sheet);
