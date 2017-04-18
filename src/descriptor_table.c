@@ -7,7 +7,7 @@ void init_gdtidt(void) {
     int i;
 
     // GDTの初期化
-    for (i = 0; i < 8192; i++) {
+    for (i = 0; i <= LIMIT_GDT / 8; i++) {
         set_segment_descriptor(gdt + i, 0, 0, 0);
     }
     set_segment_descriptor(gdt + 1, 0xffffffff, 0x00000000, AR_DATA32_RW);
@@ -21,6 +21,7 @@ void init_gdtidt(void) {
     load_idtr(LIMIT_IDT, ADR_IDT);
 
     // IDTの設定
+    set_gate_descriptor(idt + 0x20, (int) asm_inthandler20, 2 * 8, AR_INTGATE32);
 	set_gate_descriptor(idt + 0x21, (int) asm_inthandler21, 2 * 8, AR_INTGATE32);
 	set_gate_descriptor(idt + 0x27, (int) asm_inthandler27, 2 * 8, AR_INTGATE32);
 	set_gate_descriptor(idt + 0x2c, (int) asm_inthandler2c, 2 * 8, AR_INTGATE32);

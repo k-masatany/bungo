@@ -7,16 +7,20 @@ void make_window8(unsigned char *buffer, int width, int height, char *title);
 void BungoMain(void)
 {
     struct BOOT_INFO *boot_info = (struct BOOT_INFO *) ADR_BOOTINFO;
-    struct MOUSE_DECODER mouse_decoder;
     char s[40];
     char keyboard_buffer[KEY_BUF_SIZE], mouse_buffer[MOUSE_BUF_SIZE];
+    struct MOUSE_DECODER mouse_decoder;
 	int mouse_x, mouse_y;
-    int data, count = 0;
+    int data;
     unsigned int memory_total;
     struct MEMORY_MANAGER *memory_manager = (struct MEMORY_MANAGER *) MEMORY_MANAGER_ADDRESS;
     struct SHEET_CONTROL *sheet_ctl;
     struct SHEET *sheet_back, *sheet_mouse, *sheet_window;
     unsigned char *sheet_buffer_back, *sheet_buffer_window, sheet_buffer_mouse[160];
+    struct TIMER *timer01, *timer02, *timer03;
+    struct FIFO8 timer_fifo01, timer_fifo02, timer_fifo03;
+    char timer_buffer01[TIMER_BUF_SIZE], timer_buffer02[TIMER_BUF_SIZE], timer_buffer03[TIMER_BUF_SIZE];
+
 
     init_gdtidt();
     init_pic();
@@ -24,8 +28,22 @@ void BungoMain(void)
 
     fifo8_init(&keyboard_fifo, KEY_BUF_SIZE,   keyboard_buffer);
     fifo8_init(&mouse_fifo,    MOUSE_BUF_SIZE, mouse_buffer);
-    io_out8(PIC0_IMR, 0xf9);    // PIC1とキーボードを許可(11111001)
+    init_pit();
+    io_out8(PIC0_IMR, 0xf8);    // PITとPIC1とキーボードを許可(11111000)
     io_out8(PIC1_IMR, 0xef);    // マウスを許可(11101111)
+
+    timer01 = timer_alloc();
+    timer02 = timer_alloc();
+    timer03 = timer_alloc();
+    fifo8_init(&timer_fifo01, TIMER_BUF_SIZE, timer_buffer01);
+    fifo8_init(&timer_fifo02, TIMER_BUF_SIZE, timer_buffer02);
+    fifo8_init(&timer_fifo03, TIMER_BUF_SIZE, timer_buffer03);
+    timer_init(timer01, &timer_fifo01, 1);
+    timer_init(timer02, &timer_fifo02, 1);
+    timer_init(timer03, &timer_fifo03, 1);
+    timer_set_time(timer01, 1000);
+    timer_set_time(timer02, 300);
+    timer_set_time(timer03, 50);
 
     init_keyboard();
     enable_mouse(&mouse_decoder);
@@ -66,14 +84,14 @@ void BungoMain(void)
     sheet_refresh(sheet_back, 0, 0, boot_info->screen_x, 48);
 
     for (;;) {
-        count++;
-        sprintf(s, "%010d", count);
+        sprintf(s, "%010d", timer_ctl.count);
         boxfill8(sheet_buffer_window, 160, COL8_C6C6C6, 40, 28, 119, 43);
         putfonts8_ascii(sheet_buffer_window, 160, 40, 28, COL8_000000, s);
         sheet_refresh(sheet_window, 40, 28, 120, 44);
 
         io_cli();
-        if (fifo8_status(&keyboard_fifo) + fifo8_status(&mouse_fifo) == 0) {
+        if (fifo8_status(&keyboard_fifo) + fifo8_status(&mouse_fifo) + fifo8_status(&timer_fifo01)
+                + fifo8_status(&timer_fifo02) + fifo8_status(&timer_fifo03) == 0) {
             io_sti();
         }
         else {
@@ -123,6 +141,32 @@ void BungoMain(void)
                     sheet_refresh(sheet_back, 0, 0, 80, 16);
                     sheet_slide(sheet_mouse, mouse_x, mouse_y);
                 }
+            }
+            else if (fifo8_status(&timer_fifo01) != 0) {
+                data = fifo8_get(&timer_fifo01); // とりあえず読み込む（空にするため）
+                io_sti();
+                putfonts8_ascii(sheet_buffer_back, boot_info->screen_x, 0, 64, COL8_FFFFFF, "10[sec]");
+                sheet_refresh(sheet_back, 0, 64, 56, 80);
+            }
+            else if (fifo8_status(&timer_fifo02) != 0) {
+                data = fifo8_get(&timer_fifo02); // とりあえず読み込む（空にするため）
+                io_sti();
+                putfonts8_ascii(sheet_buffer_back, boot_info->screen_x, 0, 80, COL8_FFFFFF, "3[sec]");
+                sheet_refresh(sheet_back, 0, 80, 48, 96);
+            }
+            else if (fifo8_status(&timer_fifo03) != 0) {
+                data = fifo8_get(&timer_fifo03); // とりあえず読み込む（空にするため）
+                io_sti();
+                if (data != 0) {
+                    timer_init(timer03, &timer_fifo03, 0);
+                    boxfill8(sheet_buffer_back, boot_info->screen_x, COL8_FFFFFF, 8, 96, 15, 111);
+                }
+                else {
+                    timer_init(timer03, &timer_fifo03, 1);
+                    boxfill8(sheet_buffer_back, boot_info->screen_x, COL8_008484, 8, 96, 15, 111);
+                }
+                timer_set_time(timer03, 50);
+                sheet_refresh(sheet_back, 8, 96, 16, 112);
             }
         }
     }

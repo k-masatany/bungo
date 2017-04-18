@@ -22,6 +22,7 @@ void load_gdtr(int limit, int addr);
 void load_idtr(int limit, int addr);
 int load_cr0(void);
 void store_cr0(int cr0);
+void asm_inthandler20(void);
 void asm_inthandler21(void);
 void asm_inthandler27(void);
 void asm_inthandler2c(void);
@@ -177,11 +178,11 @@ struct SHEET {
     struct SHEET_CONTROL *control;  // 所属
 };
 struct SHEET_CONTROL {
-    unsigned char *vram;        // Video RAM
+    unsigned char *vram;            // Video RAM
     unsigned char *map;
     int screen_x;
     int screen_y;
-    int top;                    // 一番上にあるSHEETの高さ
+    int top;                        // 一番上にあるSHEETの高さ
     struct SHEET *sheets_head[MAX_SHEETS];  // 各SHEET構造体へのポインタを保存する
     struct SHEET  sheets[MAX_SHEETS];       // 各SHEETの情報
 };
@@ -192,3 +193,27 @@ void sheet_updown(struct SHEET *sheet, int layer);
 void sheet_refresh(struct SHEET *sheet, int x0, int y0, int x1, int y1);
 void sheet_slide(struct SHEET *sheet, int x, int y);
 void sheet_free(struct SHEET *sheet);
+
+// timer.c
+#define TIMER_BUF_SIZE  8
+#define MAX_TIMER       512
+struct TIMER {
+    unsigned int timeout;
+    unsigned int flags;
+    struct FIFO8 *fifo;
+    unsigned char data;
+};
+struct TIMER_CONTROL {
+    unsigned int count;
+    unsigned int next;
+    unsigned int using;
+    struct TIMER *timers_head[MAX_TIMER];
+    struct TIMER timers[MAX_TIMER];
+};
+extern struct TIMER_CONTROL timer_ctl;
+void init_pit(void);
+struct TIMER *timer_alloc(void);
+void timer_free(struct TIMER *timer);
+void timer_init(struct TIMER *timer, struct FIFO8 *fifo, unsigned char data);
+void timer_set_time(struct TIMER *timer, unsigned int timeout);
+void inthandler20(int *esp);
