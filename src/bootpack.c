@@ -2,21 +2,21 @@
 #include <stdio.h>
 #include "bootpack.h"
 
-
+void make_window8(unsigned char *buffer, int width, int height, char *title);
 
 void BungoMain(void)
 {
     struct BOOT_INFO *boot_info = (struct BOOT_INFO *) ADR_BOOTINFO;
     struct MOUSE_DECODER mouse_decoder;
-    char s[40], mouse_cursor[256];
+    char s[40];
     char keyboard_buffer[KEY_BUF_SIZE], mouse_buffer[MOUSE_BUF_SIZE];
 	int mouse_x, mouse_y;
-    int data;
+    int data, count = 0;
     unsigned int memory_total;
     struct MEMORY_MANAGER *memory_manager = (struct MEMORY_MANAGER *) MEMORY_MANAGER_ADDRESS;
     struct SHEET_CONTROL *sheet_ctl;
-    struct SHEET *sheet_back, *sheet_mouse;
-    unsigned char *sheet_buffer_back, sheet_buffer_mouse[160];
+    struct SHEET *sheet_back, *sheet_mouse, *sheet_window;
+    unsigned char *sheet_buffer_back, *sheet_buffer_window, sheet_buffer_mouse[160];
 
     init_gdtidt();
     init_pic();
@@ -38,31 +38,43 @@ void BungoMain(void)
     init_palette();
 
     sheet_ctl = sheet_control_init(memory_manager, boot_info->vram, boot_info->screen_x, boot_info->screen_y);
-    sheet_back  = sheet_alloc(sheet_ctl);
-    sheet_mouse = sheet_alloc(sheet_ctl);
-    sheet_buffer_back = (unsigned char *)memman_alloc_4k(memory_manager, boot_info->screen_x * boot_info->screen_y);
+    sheet_back   = sheet_alloc(sheet_ctl);
+    sheet_window = sheet_alloc(sheet_ctl);
+    sheet_mouse  = sheet_alloc(sheet_ctl);
+    sheet_buffer_back   = (unsigned char *)memman_alloc_4k(memory_manager, boot_info->screen_x * boot_info->screen_y);
+    sheet_buffer_window = (unsigned char *)memman_alloc_4k(memory_manager, 160 * 52);
     sheet_set_buffer(sheet_back, sheet_buffer_back, boot_info->screen_x, boot_info->screen_y, -1);
+    sheet_set_buffer(sheet_window, sheet_buffer_window, 160, 52, -1);
     sheet_set_buffer(sheet_mouse, sheet_buffer_mouse, 10, 16, 99);
 
     init_screen8(sheet_buffer_back, boot_info->screen_x, boot_info->screen_y);
     init_mouse_cursor8(sheet_buffer_mouse, 99);
-    sheet_slide(sheet_ctl, sheet_back, 0, 0);
+    make_window8(sheet_buffer_window, 160, 52, "counter");
+    sheet_slide(sheet_back, 0, 0);
     mouse_x = (boot_info->screen_x - 16) / 2;    // 画面中央になるように座標計算
     mouse_y = (boot_info->screen_y - 28 - 16) / 2;
-    sheet_slide(sheet_ctl, sheet_mouse, mouse_x, mouse_y);
-    sheet_updown(sheet_ctl, sheet_back, 0);
-    sheet_updown(sheet_ctl, sheet_mouse, 1);
+    sheet_slide(sheet_window, 80, 72);
+    sheet_slide(sheet_mouse,  mouse_x, mouse_y);
+    sheet_updown(sheet_back,   0);
+    sheet_updown(sheet_window, 1);
+    sheet_updown(sheet_mouse,  2);
     sprintf(s, "(%3d, %3d)", mouse_x, mouse_y);
 	putfonts8_ascii(sheet_buffer_back, boot_info->screen_x, 0, 0, COL8_FFFFFF, s);
     sprintf(s, "memory %dMB   free : %dKB",
             memory_total / (1024 * 1024), memman_total(memory_manager) / 1024);
     putfonts8_ascii(sheet_buffer_back, boot_info->screen_x, 0, 32, COL8_FFFFFF, s);
-    sheet_refresh(sheet_ctl, sheet_back, 0, 0, boot_info->screen_x, 48);
+    sheet_refresh(sheet_back, 0, 0, boot_info->screen_x, 48);
 
     for (;;) {
+        count++;
+        sprintf(s, "%010d", count);
+        boxfill8(sheet_buffer_window, 160, COL8_C6C6C6, 40, 28, 119, 43);
+        putfonts8_ascii(sheet_buffer_window, 160, 40, 28, COL8_000000, s);
+        sheet_refresh(sheet_window, 40, 28, 120, 44);
+
         io_cli();
         if (fifo8_status(&keyboard_fifo) + fifo8_status(&mouse_fifo) == 0) {
-            io_stihlt();
+            io_sti();
         }
         else {
             if(fifo8_status(&keyboard_fifo) != 0) {
@@ -71,7 +83,7 @@ void BungoMain(void)
                 sprintf(s, "%02X", data);
     			boxfill8(sheet_buffer_back, boot_info->screen_x, COL8_008484, 0, 16, 15, 31);
     			putfonts8_ascii(sheet_buffer_back, boot_info->screen_x, 0, 16, COL8_FFFFFF, s);
-                sheet_refresh(sheet_ctl, sheet_back, 0, 16, 16, 32);
+                sheet_refresh(sheet_back, 0, 16, 16, 32);
             }
             else if (fifo8_status(&mouse_fifo) != 0) {
                 data = fifo8_get(&mouse_fifo);
@@ -89,29 +101,82 @@ void BungoMain(void)
                     }
         			boxfill8(sheet_buffer_back, boot_info->screen_x, COL8_008484, 32, 16, 32 + 15 * 8 - 1, 31);
         			putfonts8_ascii(sheet_buffer_back, boot_info->screen_x, 32, 16, COL8_FFFFFF, s);
-                    sheet_refresh(sheet_ctl, sheet_back, 32, 16, 32 + 15 * 8, 32);
+                    sheet_refresh(sheet_back, 32, 16, 32 + 15 * 8, 32);
                     // マウスカーソルの移動
                     mouse_x += mouse_decoder.x;
                     mouse_y += mouse_decoder.y;
                     if (mouse_x < 0) {
                         mouse_x = 0;
                     }
-                    if (mouse_x > boot_info->screen_x - 10) {
-                        mouse_x = boot_info->screen_x - 10;
+                    if (mouse_x > boot_info->screen_x - 1) {
+                        mouse_x = boot_info->screen_x - 1;
                     }
                     if (mouse_y < 0) {
                         mouse_y = 0;
                     }
-                    if (mouse_y > boot_info->screen_y - 16) {
-                        mouse_y = boot_info->screen_y - 16;
+                    if (mouse_y > boot_info->screen_y - 1) {
+                        mouse_y = boot_info->screen_y - 1;
                     }
                     sprintf(s, "(%d, %d)", mouse_x, mouse_y);
                     boxfill8(sheet_buffer_back, boot_info->screen_x, COL8_008484, 0, 0, 79, 15);  // 座標消す
                     putfonts8_ascii(sheet_buffer_back, boot_info->screen_x, 0, 0, COL8_FFFFFF, s); // 座標書く
-                    sheet_refresh(sheet_ctl, sheet_back, 0, 0, 80, 16);
-                    sheet_slide(sheet_ctl, sheet_mouse, mouse_x, mouse_y);
+                    sheet_refresh(sheet_back, 0, 0, 80, 16);
+                    sheet_slide(sheet_mouse, mouse_x, mouse_y);
                 }
             }
         }
     }
+}
+
+void make_window8(unsigned char *buffer, int width, int height, char *title) {
+    static char close_button[14][16] = {
+        "OOOOOOOOOOOOOOO@",
+		"OQQQQQQQQQQQQQ$@",
+		"OQQQQQQQQQQQQQ$@",
+		"OQQQ@@QQQQ@@QQ$@",
+		"OQQQQ@@QQ@@QQQ$@",
+		"OQQQQQ@@@@QQQQ$@",
+		"OQQQQQQ@@QQQQQ$@",
+		"OQQQQQ@@@@QQQQ$@",
+		"OQQQQ@@QQ@@QQQ$@",
+		"OQQQ@@QQQQ@@QQ$@",
+		"OQQQQQQQQQQQQQ$@",
+		"OQQQQQQQQQQQQQ$@",
+		"O$$$$$$$$$$$$$$@",
+		"@@@@@@@@@@@@@@@@"
+    };
+    int x, y;
+    char c;
+
+    boxfill8(buffer, width, COL8_C6C6C6, 0,         0,          width - 1, 0         );
+	boxfill8(buffer, width, COL8_FFFFFF, 1,         1,          width - 2, 1         );
+	boxfill8(buffer, width, COL8_C6C6C6, 0,         0,          0,         height - 1);
+	boxfill8(buffer, width, COL8_FFFFFF, 1,         1,          1,         height - 2);
+	boxfill8(buffer, width, COL8_848484, width - 2, 1,          width - 2, height - 2);
+	boxfill8(buffer, width, COL8_000000, width - 1, 0,          width - 1, height - 1);
+	boxfill8(buffer, width, COL8_C6C6C6, 2,         2,          width - 3, height - 3);
+	boxfill8(buffer, width, COL8_000084, 3,         3,          width - 4, 20        );
+	boxfill8(buffer, width, COL8_848484, 1,         height - 2, width - 2, height - 2);
+	boxfill8(buffer, width, COL8_000000, 0,         height - 1, width - 1, height - 1);
+	putfonts8_ascii(buffer, width, 24, 4, COL8_FFFFFF, title);
+
+    for (y = 0; y < 14; y++) {
+        for (x = 0; x < 16; x++) {
+            c = close_button[y][x];
+            if (c == '@') {
+                c = COL8_000000;
+            }
+            else if (c == '$') {
+                c = COL8_848484;
+            }
+            else if (c == 'Q') {
+                c = COL8_C6C6C6;
+            }
+            else {
+                c = COL8_FFFFFF;
+            }
+            buffer[(5+y) * width + (width - 21 + x)] = c;
+        }
+    }
+    return;
 }

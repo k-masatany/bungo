@@ -166,17 +166,19 @@ int memman_free_4k(struct MEMORY_MANAGER *manager, unsigned int address, unsigne
 // sheet.c
 #define MAX_SHEETS      256
 struct SHEET {
-    unsigned char *buffer;      // 描画内容を記憶しているバッファへのポインタ
-    int width;                  // x方向長さ
-    int height;                 // y方向長さ
-    int x;                      // x座標
-    int y;                      // y座標
-    int color_invisible;        // 透明色番号
-    int layer;                  // レイヤー：0が下層
-    int flags;                  // 設定情報
+    unsigned char *buffer;          // 描画内容を記憶しているバッファへのポインタ
+    int width;                      // x方向長さ
+    int height;                     // y方向長さ
+    int x;                          // x座標
+    int y;                          // y座標
+    int color_invisible;            // 透明色番号
+    int layer;                      // レイヤー：0が下層
+    int flags;                      // 設定情報
+    struct SHEET_CONTROL *control;  // 所属
 };
 struct SHEET_CONTROL {
     unsigned char *vram;        // Video RAM
+    unsigned char *map;
     int screen_x;
     int screen_y;
     int top;                    // 一番上にあるSHEETの高さ
@@ -186,7 +188,7 @@ struct SHEET_CONTROL {
 struct SHEET_CONTROL *sheet_control_init(struct MEMORY_MANAGER *mem_manager, unsigned char *vram, int screen_x, int screen_y );
 struct SHEET *sheet_alloc(struct SHEET_CONTROL *sheet_ctl);
 void sheet_set_buffer(struct SHEET *sheet, unsigned char *buffer, int width, int height, int color_invisible);
-void sheet_updown(struct SHEET_CONTROL *sheet_ctl, struct SHEET *sheet, int layer);
-void sheet_refresh(struct SHEET_CONTROL *sheet_ctl, struct SHEET *sheet, int x0, int y0, int x1, int y1);
-void sheet_slide(struct SHEET_CONTROL *sheet_ctl, struct SHEET *sheet, int x, int y);
-void sheet_free(struct SHEET_CONTROL *sheet_ctl, struct SHEET *sheet);
+void sheet_updown(struct SHEET *sheet, int layer);
+void sheet_refresh(struct SHEET *sheet, int x0, int y0, int x1, int y1);
+void sheet_slide(struct SHEET *sheet, int x, int y);
+void sheet_free(struct SHEET *sheet);
