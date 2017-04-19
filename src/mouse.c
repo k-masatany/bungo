@@ -1,15 +1,17 @@
 // マウス関係
 #include "bootpack.h"
 
-struct FIFO8 mouse_fifo;
+struct FIFO32 *mouse_fifo;
+int mouse_data_base;
+
 void inthandler2c(int *esp)
 // PS/2マウスからの割り込み */
 {
-    unsigned char data;
+    int data;
     io_out8(PIC1_OCW2, 0x64);	// IRQ-12受付完了をPIC1に通知
 	io_out8(PIC0_OCW2, 0x62);	// IRQ-02受付完了をPIC0に通知
 	data = io_in8(PORT_KEY_DATA);
-    fifo8_put(&mouse_fifo, data);
+    fifo32_put(mouse_fifo, data + mouse_data_base);
     return;
 }
 
@@ -17,7 +19,12 @@ void inthandler2c(int *esp)
 #define MOUSE_COMMAND_ENABLE        0xf4
 
 // マウス有効
-void enable_mouse(struct MOUSE_DECODER *mouse_decoder) {
+void enable_mouse(struct FIFO32 *fifo, int data, struct MOUSE_DECODER *mouse_decoder) {
+
+    // 書き込み先のFIFOバッファを記憶
+    mouse_fifo = fifo;
+    mouse_data_base = data;
+    // マウス有効化
     wait_KBC_sendready();
     io_out8(PORT_KEY_COMMAND, KEY_COMMAND_SENDTO_MOUSE);
     wait_KBC_sendready();

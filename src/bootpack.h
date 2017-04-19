@@ -81,7 +81,7 @@ void set_gate_descriptor(struct GATE_DESCRIPTOR *gd, int offset, int selector, i
 #define AR_CODE32_ER	0x409a
 #define AR_INTGATE32	0x008e
 
-// Interrupt.c
+// interrupt.c
 void init_pic(void);
 void inthandler21(int *esp);
 void inthandler27(int *esp);
@@ -100,8 +100,7 @@ void inthandler2c(int *esp);
 #define PIC1_ICW4		0x00a1
 
 // fifo.c
-#define KEY_BUF_SIZE    32
-#define MOUSE_BUF_SIZE  128
+#define FIFO_BUF_SIZE   128
 struct FIFO8 {
 	unsigned char *buf;    // バッファ
 	int p;                 // 書き込み位置
@@ -110,22 +109,29 @@ struct FIFO8 {
     int free;              // 空き領域
     int flags;             // あふれフラグ
 };
+struct FIFO32 {
+	int *buf;              // バッファ
+	int p;                 // 書き込み位置
+    int q;                 // 読み込み位置
+    int size;              // バッファサイズ
+    int free;              // 空き領域
+    int flags;             // あふれフラグ
+};
 void fifo8_init(struct FIFO8 *fifo, int size, unsigned char *buf);
-int fifo8_put(struct FIFO8 *fifo, unsigned char data);
-int fifo8_get(struct FIFO8 *fifo);
-int fifo8_status(struct FIFO8 *fifo);
+int  fifo8_put(struct FIFO8 *fifo, unsigned char data);
+int  fifo8_get(struct FIFO8 *fifo);
+int  fifo8_status(struct FIFO8 *fifo);
+void fifo32_init(struct FIFO32 *fifo, int size, int *buf);
+int  fifo32_put(struct FIFO32 *fifo, int data);
+int  fifo32_get(struct FIFO32 *fifo);
+int  fifo32_status(struct FIFO32 *fifo);
 
 // keybord.c
 #define PORT_KEY_DATA			  0x0060
-#define PORT_KEY_STATUS			  0x0064
 #define PORT_KEY_COMMAND		  0x0064
-#define KEY_STATUS_SEND_NOTREAD   0x02
-#define KEY_COMMAND_WRITE_MODE    0x60
-#define KBC_MODE                  0x47
-extern struct FIFO8 keyboard_fifo;
 void inthandler21(int *esp);
 void wait_KBC_sendready(void);
-void init_keyboard(void);
+void init_keyboard(struct FIFO32 *fifo, int data);
 
 // mouse.c
 struct MOUSE_DECODER {
@@ -136,9 +142,8 @@ struct MOUSE_DECODER {
     int button;
 };
 void inthandler2c(int *esp);
-void enable_mouse(struct MOUSE_DECODER *mouse_decoder);
+void enable_mouse(struct FIFO32 *fifo, int data, struct MOUSE_DECODER *mouse_decoder);
 int mouse_decode(struct MOUSE_DECODER *mouse_decoder, unsigned char data);
-extern struct FIFO8 mouse_fifo;
 
 // memory.c
 #define MEMORY_MANAGER_FREES    4090    // これで約32KB
@@ -195,25 +200,26 @@ void sheet_slide(struct SHEET *sheet, int x, int y);
 void sheet_free(struct SHEET *sheet);
 
 // timer.c
-#define TIMER_BUF_SIZE  8
 #define MAX_TIMER       512
 struct TIMER {
     unsigned int timeout;
+    unsigned int interval;
     unsigned int flags;
-    struct FIFO8 *fifo;
-    unsigned char data;
+    struct FIFO32 *fifo;
+    int data;
+    struct TIMER *next;
 };
 struct TIMER_CONTROL {
     unsigned int count;
     unsigned int next;
     unsigned int using;
-    struct TIMER *timers_head[MAX_TIMER];
+    struct TIMER *timers_head;
     struct TIMER timers[MAX_TIMER];
 };
 extern struct TIMER_CONTROL timer_ctl;
 void init_pit(void);
 struct TIMER *timer_alloc(void);
 void timer_free(struct TIMER *timer);
-void timer_init(struct TIMER *timer, struct FIFO8 *fifo, unsigned char data);
+void timer_init(struct TIMER *timer, struct FIFO32 *fifo, int data);
 void timer_set_time(struct TIMER *timer, unsigned int timeout);
 void inthandler20(int *esp);
