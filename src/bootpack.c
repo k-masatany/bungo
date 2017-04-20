@@ -3,6 +3,7 @@
 #include "bootpack.h"
 
 void make_window8(unsigned char *buffer, int width, int height, char *title);
+void make_textbox(struct SHEET *sheet, int x0, int y0, int width, int height, int color);
 void putfonts8_ascii_sheet(struct SHEET *sheet, int x, int y, int color, int bg_color, char *s, int l);
 int str_len(char *s);
 
@@ -13,14 +14,23 @@ void BungoMain(void)
     int fifo_buffer[FIFO_BUF_SIZE];
     char s[40];
     struct MOUSE_DECODER mouse_decoder;
-	int mouse_x, mouse_y;
-    int data, count = 0;
+    int mouse_x, mouse_y;
+	int cursor_x, cursor_c;
+    int data;
     unsigned int memory_total;
     struct MEMORY_MANAGER *memory_manager = (struct MEMORY_MANAGER *) MEMORY_MANAGER_ADDRESS;
     struct SHEET_CONTROL *sheet_ctl;
     struct SHEET *sheet_back, *sheet_mouse, *sheet_window;
     unsigned char *sheet_buffer_back, *sheet_buffer_window, sheet_buffer_mouse[160];
     struct TIMER *timer01, *timer02, *timer03;
+    static char keytable[0x54] = {
+        0,   0,   '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '^', 0,   0,
+        'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '@', '[', 0,   0,   'A', 'S',
+        'D', 'F', 'G', 'H', 'J', 'K', 'L', ';', ':', 0,   0,   ']', 'Z', 'X', 'C', 'V',
+        'B', 'N', 'M', ',', '.', '/', 0,   '*', 0,   ' ', 0,   0,   0,   0,   0,   0,
+        0,   0,   0,   0,   0,   0,   0,   '7', '8', '9', '-', '4', '5', '6', '+', '1',
+        '2', '3', '0', '.'
+    };
 
     init_gdtidt();
     init_pic();
@@ -63,7 +73,10 @@ void BungoMain(void)
 
     init_screen8(sheet_buffer_back, boot_info->screen_x, boot_info->screen_y);
     init_mouse_cursor8(sheet_buffer_mouse, 99);
-    make_window8(sheet_buffer_window, 160, 52, "counter");
+    make_window8(sheet_buffer_window, 160, 52, "window");
+    make_textbox(sheet_window, 8, 28, 144, 16, COL8_FFFFFF);
+    cursor_x = 8;
+    cursor_c = COL8_FFFFFF;
     sheet_slide(sheet_back, 0, 0);
     mouse_x = (boot_info->screen_x - 16) / 2;    // 画面中央になるように座標計算
     mouse_y = (boot_info->screen_y - 28 - 16) / 2;
@@ -80,20 +93,33 @@ void BungoMain(void)
     sheet_refresh(sheet_back, 0, 0, boot_info->screen_x, 48);
 
     for (;;) {
-        count++;
-        sprintf(s, "%10u", timer_ctl.count);
-        putfonts8_ascii_sheet(sheet_window, 40, 28, COL8_000000, COL8_C6C6C6, s, 10);
         io_cli();
         if (fifo32_status(&fifo) == 0) {
-            io_sti();
+            io_stihlt();
         }
         else {
             data = fifo32_get(&fifo);
             io_sti();
+            // キーボード操作
             if(0x0100 <= data && data < 0x0200) {
                 sprintf(s, "%02X", data - 0x0100);
                 putfonts8_ascii_sheet(sheet_back, 0, 16, COL8_FFFFFF, COL8_008484, s, 2);
+                if (data < 0x0100 + 0x54) {
+                    if (keytable[data - 0x0100] != 0 && cursor_x <= 144) {
+                        s[0] = keytable[data - 0x0100];
+                        s[1] = 0;
+                        putfonts8_ascii_sheet(sheet_window, cursor_x, 28, COL8_000000, COL8_FFFFFF, s, 1);
+                        cursor_x += 8;
+                        if (cursor_x > 144) { cursor_x = 144; }
+                    }
+                }
+                if (data == 0x0100 + 0xe && 8 <= cursor_x) {
+                    putfonts8_ascii_sheet(sheet_window, cursor_x, 28, COL8_000000, COL8_FFFFFF, " ", 1);
+                    cursor_x -= 8;
+                    if (cursor_x < 8) { cursor_x = 8; }
+                }
             }
+            // マウス操作
             else if (0x0200 <= data && data < 0x0300) {
                 if (mouse_decode(&mouse_decoder, data - 0x0200) != 0) {
                     sprintf(s, "[lcr %4d %4d]", mouse_decoder.x, mouse_decoder.y);
@@ -125,29 +151,28 @@ void BungoMain(void)
                     sprintf(s, "(%3d, %3d)", mouse_x, mouse_y);
                     putfonts8_ascii_sheet(sheet_back, 0, 0, COL8_FFFFFF, COL8_008484, s, 10);
                     sheet_slide(sheet_mouse, mouse_x, mouse_y);
+                    if ((mouse_decoder.button & 0x01) != 0) {
+                        sheet_slide(sheet_window, mouse_x, mouse_y);
+                    }
                 }
             }
             else if (data == 100) {
                 putfonts8_ascii_sheet(sheet_back, 0, 64, COL8_FFFFFF, COL8_008484, "10[sec]", 7);
-                // sprintf(s, "%10d", count);
-                // putfonts8_ascii_sheet(sheet_window, 40, 28, COL8_000000, COL8_C6C6C6, s, 10);
             }
             else if (data == 30) {
                 putfonts8_ascii_sheet(sheet_back, 0, 80, COL8_FFFFFF, COL8_008484, " 3[sec]", 7);
-                // count = 0;
             }
             else if (data == 1){
                 timer_init(timer03, &fifo, 0);
-                boxfill8(sheet_buffer_back, boot_info->screen_x, COL8_008484, 8, 96, 15, 111);
-                timer_set_time(timer03, 50);
-                sheet_refresh(sheet_back, 8, 96, 16, 112);
+                cursor_c = COL8_000000;
             }
             else if (data == 0) {
                 timer_init(timer03, &fifo, 1);
-                boxfill8(sheet_buffer_back, boot_info->screen_x, COL8_FFFFFF, 8, 96, 15, 111);
-                timer_set_time(timer03, 50);
-                sheet_refresh(sheet_back, 8, 96, 16, 112);
+                cursor_c = COL8_FFFFFF;
             }
+            timer_set_time(timer03, 50);
+            boxfill8(sheet_buffer_window, sheet_window->width, cursor_c, cursor_x, 28, cursor_x + 7, 43);
+            sheet_refresh(sheet_window, cursor_x, 28, cursor_x + 8, 44);
         }
     }
 }
@@ -202,6 +227,22 @@ void make_window8(unsigned char *buffer, int width, int height, char *title) {
             buffer[(5+y) * width + (width - 21 + x)] = c;
         }
     }
+    return;
+}
+
+void make_textbox(struct SHEET *sheet, int x0, int y0, int width, int height, int color) {
+    int x1 = x0 + width;
+    int y1 = y0 + height;
+
+    boxfill8(sheet->buffer, sheet->width, COL8_848484, x0 - 2, y0 - 3, x1 + 1, y0 - 3);
+    boxfill8(sheet->buffer, sheet->width, COL8_848484, x0 - 3, y0 - 3, x0 - 3, y1 + 1);
+    boxfill8(sheet->buffer, sheet->width, COL8_FFFFFF, x0 - 3, y1 + 2, x1 + 1, y1 + 2);
+    boxfill8(sheet->buffer, sheet->width, COL8_FFFFFF, x1 + 2, y0 - 3, x1 + 2, y1 + 2);
+    boxfill8(sheet->buffer, sheet->width, COL8_000000, x0 - 1, y0 - 2, x1 + 0, y0 - 2);
+    boxfill8(sheet->buffer, sheet->width, COL8_000000, x0 - 2, y0 - 2, x0 - 2, y1 + 0);
+    boxfill8(sheet->buffer, sheet->width, COL8_C6C6C6, x0 - 2, y1 + 1, x1 + 0, y1 + 1);
+    boxfill8(sheet->buffer, sheet->width, COL8_C6C6C6, x1 + 1, y0 - 2, x1 + 1, y1 + 1);
+    boxfill8(sheet->buffer, sheet->width, color      , x0 - 1, y0 - 1, x1 + 0, y1 + 0);
     return;
 }
 
