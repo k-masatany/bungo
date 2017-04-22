@@ -5,7 +5,7 @@
 void make_window8(unsigned char *buffer, int width, int height, char *title);
 void make_textbox(struct SHEET *sheet, int x0, int y0, int width, int height, int color);
 void putfonts8_ascii_sheet(struct SHEET *sheet, int x, int y, int color, int bg_color, char *s, int l);
-int str_len(char *s);
+void task_b_main(struct SHEET *sheet_back);
 
 void BungoMain(void)
 {
@@ -31,27 +31,30 @@ void BungoMain(void)
         0,   0,   0,   0,   0,   0,   0,   '7', '8', '9', '-', '4', '5', '6', '+', '1',
         '2', '3', '0', '.'
     };
+    struct TSS32 tss_a, tss_b;
+    struct SEGMENT_DESCRIPTOR *gdt = (struct SEGMENT_DESCRIPTOR *) ADR_GDT;
+    int task_b_esp;
 
     init_gdtidt();
     init_pic();
     io_sti();       // IDT/PICの初期化が終わったのでCPUの割り込み禁止を解除
 
     fifo32_init(&fifo, FIFO_BUF_SIZE, fifo_buffer);
+    init_pit();
     init_keyboard(&fifo, 0x0100);
     enable_mouse(&fifo, 0x200, &mouse_decoder);
 
-    init_pit();
     io_out8(PIC0_IMR, 0xf8);    // PITとPIC1とキーボードを許可(11111000)
     io_out8(PIC1_IMR, 0xef);    // マウスを許可(11101111)
 
     timer01 = timer_alloc();
-    timer02 = timer_alloc();
-    timer03 = timer_alloc();
-    timer_init(timer01, &fifo, 100);
-    timer_init(timer02, &fifo, 30);
-    timer_init(timer03, &fifo, 1);
+    timer_init(timer01, &fifo, 10);
     timer_set_time(timer01, 1000);
+    timer02 = timer_alloc();
+    timer_init(timer02, &fifo, 3);
     timer_set_time(timer02, 300);
+    timer03 = timer_alloc();
+    timer_init(timer03, &fifo, 1);
     timer_set_time(timer03, 50);
 
     memory_total = memtest(0x00400000, 0xbfffffff);
@@ -89,8 +92,34 @@ void BungoMain(void)
 	putfonts8_ascii(sheet_buffer_back, boot_info->screen_x, 0, 0, COL8_FFFFFF, s);
     sprintf(s, "memory %dMB   free : %dKB",
             memory_total / (1024 * 1024), memman_total(memory_manager) / 1024);
-    putfonts8_ascii(sheet_buffer_back, boot_info->screen_x, 0, 32, COL8_FFFFFF, s);
-    sheet_refresh(sheet_back, 0, 0, boot_info->screen_x, 48);
+    putfonts8_ascii_sheet(sheet_back, 0, 32, COL8_FFFFFF, COL8_008484, s, 40);
+
+    tss_a.ldtr  = 0;
+    tss_a.iomap = 0x40000000;
+    tss_b.ldtr  = 0;
+    tss_b.iomap = 0x40000000;
+    set_segment_descriptor(gdt + 3, 103, (int) &tss_a, AR_TSS32);
+    set_segment_descriptor(gdt + 4, 103, (int) &tss_b, AR_TSS32);
+    load_tr(3 * 8);
+    task_b_esp = memman_alloc_4k(memory_manager, 64 * 1024) + 64 * 1024 - 8;
+    tss_b.eip    = (int) &task_b_main;
+    tss_b.eflags = 0x00000202;    // IF = 1;
+    tss_b.eax    = 0;
+    tss_b.ecx    = 0;
+    tss_b.edx    = 0;
+    tss_b.ebx    = 0;
+    tss_b.esp    = task_b_esp;
+    tss_b.ebp    = 0;
+    tss_b.esi    = 0;
+    tss_b.edi    = 0;
+    tss_b.es     = 1 * 8;
+    tss_b.cs     = 2 * 8;
+    tss_b.ss     = 1 * 8;
+    tss_b.ds     = 1 * 8;
+    tss_b.fs     = 1 * 8;
+    tss_b.gs     = 1 * 8;
+    *((int *) (task_b_esp + 4)) = (int) sheet_back;
+    tasks_init();
 
     for (;;) {
         io_cli();
@@ -102,22 +131,21 @@ void BungoMain(void)
             io_sti();
             // キーボード操作
             if(0x0100 <= data && data < 0x0200) {
-                sprintf(s, "%02X", data - 0x0100);
-                putfonts8_ascii_sheet(sheet_back, 0, 16, COL8_FFFFFF, COL8_008484, s, 2);
                 if (data < 0x0100 + 0x54) {
                     if (keytable[data - 0x0100] != 0 && cursor_x <= 144) {
                         s[0] = keytable[data - 0x0100];
                         s[1] = 0;
                         putfonts8_ascii_sheet(sheet_window, cursor_x, 28, COL8_000000, COL8_FFFFFF, s, 1);
-                        cursor_x += 8;
-                        if (cursor_x > 144) { cursor_x = 144; }
+                        if (cursor_x < 144) { cursor_x += 8; }
                     }
                 }
                 if (data == 0x0100 + 0xe && 8 <= cursor_x) {
                     putfonts8_ascii_sheet(sheet_window, cursor_x, 28, COL8_000000, COL8_FFFFFF, " ", 1);
-                    cursor_x -= 8;
-                    if (cursor_x < 8) { cursor_x = 8; }
+                    if (cursor_x > 8) { cursor_x -= 8; }
                 }
+                // カーソルの再表示
+				boxfill8(sheet_window->buffer, sheet_window->width, cursor_c, cursor_x, 28, cursor_x + 7, 43);
+				sheet_refresh(sheet_window, cursor_x, 28, cursor_x + 8, 44);
             }
             // マウス操作
             else if (0x0200 <= data && data < 0x0300) {
@@ -156,23 +184,25 @@ void BungoMain(void)
                     }
                 }
             }
-            else if (data == 100) {
+            else if (data == 10) {
                 putfonts8_ascii_sheet(sheet_back, 0, 64, COL8_FFFFFF, COL8_008484, "10[sec]", 7);
             }
-            else if (data == 30) {
+            else if (data == 3) {
                 putfonts8_ascii_sheet(sheet_back, 0, 80, COL8_FFFFFF, COL8_008484, " 3[sec]", 7);
             }
-            else if (data == 1){
-                timer_init(timer03, &fifo, 0);
-                cursor_c = COL8_000000;
+            else if (data <= 1) {
+                if (data != 0){
+                    timer_init(timer03, &fifo, 0);
+                    cursor_c = COL8_000000;
+                }
+                else {
+                    timer_init(timer03, &fifo, 1);
+                    cursor_c = COL8_FFFFFF;
+                }
+                timer_set_time(timer03, 50);
+                boxfill8(sheet_buffer_window, sheet_window->width, cursor_c, cursor_x, 28, cursor_x + 7, 43);
+                sheet_refresh(sheet_window, cursor_x, 28, cursor_x + 8, 44);
             }
-            else if (data == 0) {
-                timer_init(timer03, &fifo, 1);
-                cursor_c = COL8_FFFFFF;
-            }
-            timer_set_time(timer03, 50);
-            boxfill8(sheet_buffer_window, sheet_window->width, cursor_c, cursor_x, 28, cursor_x + 7, 43);
-            sheet_refresh(sheet_window, cursor_x, 28, cursor_x + 8, 44);
         }
     }
 }
@@ -252,12 +282,33 @@ void putfonts8_ascii_sheet(struct SHEET *sheet, int x, int y, int color, int bg_
     sheet_refresh(sheet, x, y, x + (8*l), y + 16);
 }
 
-int str_len(char *s) {
-    int i;
-    for (i = 0; i < 256; i++) {
-        if (s[i] == '\0') {
-            return i;
+void task_b_main(struct SHEET *sheet_back) {
+    struct FIFO32 fifo;
+    int fifo_buffer[FIFO_BUF_SIZE];
+    int fifo_data;
+    struct TIMER  *timer_put;
+    int count = 0;
+    char s[11];
+
+    fifo32_init(&fifo, FIFO_BUF_SIZE, fifo_buffer);
+    timer_put = timer_alloc();
+    timer_init(timer_put, &fifo, 1);
+    timer_set_time(timer_put, 1);
+
+    for (;;) {
+        count++;
+        io_cli();
+        if (fifo32_status(&fifo) == 0) {
+            io_stihlt();
+        }
+        else {
+            fifo_data = fifo32_get(&fifo);
+            io_sti();
+            if (fifo_data == 1) {
+                sprintf(s, "%10d", count);
+                putfonts8_ascii_sheet(sheet_back, 0, 144, COL8_FFFFFF, COL8_008484, s, 10);
+                timer_set_time(timer_put, 1);
+            }
         }
     }
-    return -1;
 }

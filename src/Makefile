@@ -34,6 +34,7 @@ MEMORY_OBJ   	= $(BUILD_PATH)\memory.obj
 SHEET_OBJ   	= $(BUILD_PATH)\sheet.obj
 SHEET_OBJ   	= $(BUILD_PATH)\sheet.obj
 TIMER_OBJ   	= $(BUILD_PATH)\timer.obj
+MULTITASK_OBJ  	= $(BUILD_PATH)\multitask.obj
 
 BOOTPACK_OBJ    = $(BUILD_PATH)\bootpack.obj
 BOOTPACK_BIM	= $(BUILD_PATH)\bootpack.bim
@@ -41,7 +42,7 @@ BOOTPACK_MAP	= $(BUILD_PATH)\bootpack.map
 BOOTPACK_HRB	= $(BUILD_PATH)\bootpack.hrb
 OBJS_BOOTPACK   = $(BOOTPACK_OBJ) $(NASKFUNK_OBJ) $(CHARSET_OBJ) $(GRAPHIC_OBJ) \
             	$(DESC_TBL_OBJ) $(INTERRUPT_OBJ) $(FIFO_OBJ) $(KEYBORD_OBJ) $(MOUSE_OBJ) \
-				$(MEMORY_OBJ) $(SHEET_OBJ) $(TIMER_OBJ)
+				$(MEMORY_OBJ) $(SHEET_OBJ) $(TIMER_OBJ) $(MULTITASK_OBJ)
 CHARSET_SRC		= hankaku.txt
 CHARSET_BINARY	= $(BUILD_PATH)\hankaku.bin
 CHARSET_OBJ		= $(BUILD_PATH)\hankaku.obj

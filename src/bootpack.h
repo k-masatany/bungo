@@ -22,11 +22,13 @@ void load_gdtr(int limit, int addr);
 void load_idtr(int limit, int addr);
 int load_cr0(void);
 void store_cr0(int cr0);
+void load_tr(int tr);
 void asm_inthandler20(void);
 void asm_inthandler21(void);
 void asm_inthandler27(void);
 void asm_inthandler2c(void);
 unsigned int memtest_sub(unsigned int start, unsigned int end);
+void farjmp(int eip, int cs);
 
 // graphic.c
 void init_palette(void);
@@ -79,6 +81,7 @@ void set_gate_descriptor(struct GATE_DESCRIPTOR *gd, int offset, int selector, i
 #define LIMIT_BOTPAK	0x0007ffff
 #define AR_DATA32_RW	0x4092
 #define AR_CODE32_ER	0x409a
+#define AR_TSS32		0x0089
 #define AR_INTGATE32	0x008e
 
 // interrupt.c
@@ -101,14 +104,6 @@ void inthandler2c(int *esp);
 
 // fifo.c
 #define FIFO_BUF_SIZE   128
-struct FIFO8 {
-	unsigned char *buf;    // バッファ
-	int p;                 // 書き込み位置
-    int q;                 // 読み込み位置
-    int size;              // バッファサイズ
-    int free;              // 空き領域
-    int flags;             // あふれフラグ
-};
 struct FIFO32 {
 	int *buf;              // バッファ
 	int p;                 // 書き込み位置
@@ -117,10 +112,6 @@ struct FIFO32 {
     int free;              // 空き領域
     int flags;             // あふれフラグ
 };
-void fifo8_init(struct FIFO8 *fifo, int size, unsigned char *buf);
-int  fifo8_put(struct FIFO8 *fifo, unsigned char data);
-int  fifo8_get(struct FIFO8 *fifo);
-int  fifo8_status(struct FIFO8 *fifo);
 void fifo32_init(struct FIFO32 *fifo, int size, int *buf);
 int  fifo32_put(struct FIFO32 *fifo, int data);
 int  fifo32_get(struct FIFO32 *fifo);
@@ -203,7 +194,6 @@ void sheet_free(struct SHEET *sheet);
 #define MAX_TIMER       512
 struct TIMER {
     unsigned int timeout;
-    unsigned int interval;
     unsigned int flags;
     struct FIFO32 *fifo;
     int data;
@@ -212,7 +202,6 @@ struct TIMER {
 struct TIMER_CONTROL {
     unsigned int count;
     unsigned int next;
-    unsigned int using;
     struct TIMER *timers_head;
     struct TIMER timers[MAX_TIMER];
 };
@@ -223,3 +212,14 @@ void timer_free(struct TIMER *timer);
 void timer_init(struct TIMER *timer, struct FIFO32 *fifo, int data);
 void timer_set_time(struct TIMER *timer, unsigned int timeout);
 void inthandler20(int *esp);
+
+// multitask.c
+struct TSS32 {
+    int backlink, esp0, ss0, esp1, ss1, esp2, ss2, cr3;
+    int eip, eflags, eax, ebx, ecx, edx, esp, ebp, esi, edi;
+    int es, cs, ss, ds, fs, gs;
+    int ldtr, iomap;
+};
+void tasks_init(void);
+void tasks_taskswitch(void);
+extern struct TIMER *tasks_timer;
