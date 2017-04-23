@@ -111,8 +111,9 @@ struct FIFO32 {
     int size;              // バッファサイズ
     int free;              // 空き領域
     int flags;             // あふれフラグ
+    struct TASK *task;     // データが入ったときに起こすタスク
 };
-void fifo32_init(struct FIFO32 *fifo, int size, int *buf);
+void fifo32_init(struct FIFO32 *fifo, int size, int *buf, struct TASK *task);
 int  fifo32_put(struct FIFO32 *fifo, int data);
 int  fifo32_get(struct FIFO32 *fifo);
 int  fifo32_status(struct FIFO32 *fifo);
@@ -214,12 +215,37 @@ void timer_set_time(struct TIMER *timer, unsigned int timeout);
 void inthandler20(int *esp);
 
 // multitask.c
+#define MAX_TASKS       1000
+#define MAX_TASKS_LV    100
+#define MAX_TASKLEVELS  10
+#define TASK_GDT0   3       // TASKをGDTの何番から割り当てるか
 struct TSS32 {
     int backlink, esp0, ss0, esp1, ss1, esp2, ss2, cr3;
     int eip, eflags, eax, ebx, ecx, edx, esp, ebp, esi, edi;
     int es, cs, ss, ds, fs, gs;
     int ldtr, iomap;
 };
-void tasks_init(void);
-void tasks_taskswitch(void);
-extern struct TIMER *tasks_timer;
+struct TASK {
+    int selector;       // GDTの番号
+    int flags;
+    int level;
+    int priority;
+    struct TSS32 tss;
+};
+struct TASK_LEVEL {
+    int running;    // 動作しているタスクの数
+    int now;        // 動作中のタスク
+    struct TASK *tasks_head[MAX_TASKS_LV];
+};
+struct TASK_CONTROL {
+    int now_level;          // 現在動作中のLv
+    char need_lv_change;    // 次の切り替え時にLvを切り替えるかどうか
+    struct TASK_LEVEL levels[MAX_TASKLEVELS];
+    struct TASK tasks[MAX_TASKS];
+};
+extern struct TIMER *task_timer;
+struct TASK *task_init(struct MEMORY_MANAGER *memory_manager);
+struct TASK *task_alloc(void);
+void task_run(struct TASK *task, int level, int priority);
+void task_switch(void);
+void task_sleep(struct TASK *task);

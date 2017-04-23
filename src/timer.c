@@ -85,7 +85,7 @@ void timer_set_time(struct TIMER *timer, unsigned int timeout) {
 
 void inthandler20(int *esp) {
     struct TIMER *timer;
-    char task_switch = 0;
+    char need_task_switch = 0;
     io_out8(PIC0_OCW2, 0x60);   // IRQ-00受付完了をPICに通知
     timer_ctl.count = (timer_ctl.count + 1) & 0x7fffffff;
     if (timer_ctl.next > timer_ctl.count) {
@@ -98,19 +98,19 @@ void inthandler20(int *esp) {
             break;  // まだタイムアウトではない
         }
         timer->flags = TIMER_FLAGS_ALLOC;
-        if (timer != tasks_timer) {
+        if (timer != task_timer) {
             fifo32_put(timer->fifo, timer->data);
         }
         else {
-            task_switch = 1;
+            need_task_switch = 1;
         }
         timer = timer->next;    // 次のタイマを代入
     }
     // 新しいずらし
     timer_ctl.timers_head = timer;
     timer_ctl.next = timer->timeout;
-    if (task_switch != 0) {
-        tasks_taskswitch();
+    if (need_task_switch != 0) {
+        task_switch();
     }
     return;
 }
