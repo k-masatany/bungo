@@ -104,6 +104,7 @@ void inthandler2c(int *esp);
 
 // fifo.c
 #define FIFO_BUF_SIZE   128
+#define KEY_CMD_BUF     32
 struct FIFO32 {
 	int *buf;              // バッファ
 	int p;                 // 書き込み位置
@@ -231,6 +232,7 @@ struct TASK {
     int level;
     int priority;
     struct TSS32 tss;
+    struct FIFO32 fifo;
 };
 struct TASK_LEVEL {
     int running;    // 動作しているタスクの数
@@ -249,3 +251,4 @@ struct TASK *task_alloc(void);
 void task_run(struct TASK *task, int level, int priority);
 void task_switch(void);
 void task_sleep(struct TASK *task);
+struct TASK *task_now(void);

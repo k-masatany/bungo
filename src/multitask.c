@@ -10,7 +10,7 @@ struct TASK *task_now(void) {
 }
 
 void task_add(struct TASK *task) {
-    struct TASK_LEVEL *task_lv = &task_ctl->levels[task_ctl->now_level];
+    struct TASK_LEVEL *task_lv = &task_ctl->levels[task->level];
     task_lv->tasks_head[task_lv->running] = task;
     task_lv->running++;
     task->flags = 2;
@@ -19,7 +19,7 @@ void task_add(struct TASK *task) {
 
 void task_remove(struct TASK *task) {
     int i;
-    struct TASK_LEVEL *task_lv = &task_ctl->levels[task_ctl->now_level];
+    struct TASK_LEVEL *task_lv = &task_ctl->levels[task->level];
 
     // taskがどこにいるかを探す
     for (i = 0; i < task_lv->running; i++) {
@@ -58,9 +58,15 @@ void task_switch_sub(void) {
     return;
 }
 
+void task_idle(void) {
+    for (;;) {
+        io_hlt();
+    }
+}
+
 struct TASK  *task_init(struct MEMORY_MANAGER *memory_manager) {
     int i;
-    struct TASK *task;
+    struct TASK *task, *idle;
     struct SEGMENT_DESCRIPTOR *gdt = (struct SEGMENT_DESCRIPTOR *) ADR_GDT;
     task_ctl = (struct TASK_CONTROL *) memman_alloc_4k(memory_manager, sizeof(struct TASK_CONTROL));
     for (i = 0; i < MAX_TASKS; i++) {
@@ -81,6 +87,19 @@ struct TASK  *task_init(struct MEMORY_MANAGER *memory_manager) {
     load_tr(task->selector);
     task_timer = timer_alloc();
     timer_set_time(task_timer, task->priority);
+
+    // idleタスクを最低優先度タスクとして登録
+    idle = task_alloc();
+    idle->tss.esp = memman_alloc_4k(memory_manager, 64 * 1024)+ 64 * 1024;
+    idle->tss.eip = (int) &task_idle;
+    idle->tss.es  = 1 * 8;
+    idle->tss.cs  = 2 * 8;
+    idle->tss.ss  = 1 * 8;
+    idle->tss.ds  = 1 * 8;
+    idle->tss.fs  = 1 * 8;
+    idle->tss.gs  = 1 * 8;
+    task_run(idle, MAX_TASKLEVELS - 1, 1);
+
     return task;
 }
 
