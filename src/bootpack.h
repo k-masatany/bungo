@@ -7,7 +7,18 @@ struct BOOT_INFO {              // 0x0ff0-0x0fff
 	short screen_x, screen_y;  // 画面解像度
 	char *vram;
 };
+struct FILE_INFO {
+    unsigned char name[8];      // ファイル名
+    unsigned char ext[3];       // 拡張子
+    unsigned char type;         // ファイルタイプ
+    char reserve[10];           // 予約領域
+    unsigned short time;        // 時刻
+    unsigned short date;        // 日付
+    unsigned short clust_no;    // クラスタ番号（セクタ番号）
+    unsigned int size;          // ファイルサイズ
+};
 #define ADR_BOOTINFO	0x00000ff0
+#define ADR_DISKIMG 	0x00100000
 
 // naskfunc.nasm
 void io_hlt(void);

@@ -82,6 +82,8 @@ $(BUNGO_IMG): $(IPL_BINARY) $(BUNGO_SYS) Makefile
 	$(EDIMG)   imgin:$(TOOL_PATH)\fdimg0at.tek \
 		wbinimg src:$(IPL_BINARY) len:512 from:0 to:0 \
 		copy from:$(BUNGO_SYS) to:@: \
+		copy from:hankaku.txt to:@: \
+		copy from:bootpack.c to:@: \
 		imgout:$(BUNGO_IMG)
 
 $(NASKFUNK_OBJ):
@@ -142,3 +144,7 @@ src_only :
 	$(MAKE) clean
 	-del $(BUNGO_IMG)
 	-del $(BUNGO_LIB)
+
+rerun:
+	$(MAKE) clean
+	$(MAKE) run
