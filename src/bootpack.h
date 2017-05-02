@@ -14,7 +14,7 @@ struct FILE_INFO {
     char reserve[10];           // 予約領域
     unsigned short time;        // 時刻
     unsigned short date;        // 日付
-    unsigned short clust_no;    // クラスタ番号（セクタ番号）
+    unsigned short cluster_no;  // クラスタ番号（セクタ番号）
     unsigned int size;          // ファイルサイズ
 };
 #define ADR_BOOTINFO	0x00000ff0
@@ -218,7 +218,6 @@ struct TIMER_CONTROL {
     struct TIMER *timers_head;
     struct TIMER timers[MAX_TIMER];
 };
-extern struct TIMER_CONTROL timer_ctl;
 void init_pit(void);
 struct TIMER *timer_alloc(void);
 void timer_free(struct TIMER *timer);
@@ -263,3 +262,16 @@ void task_run(struct TASK *task, int level, int priority);
 void task_switch(void);
 void task_sleep(struct TASK *task);
 struct TASK *task_now(void);
+
+// window.c
+void make_window8(unsigned char *buffer, int width, int height, char *title, char active);
+void make_window_title(unsigned char *buffer, int width, char *title, char active);
+void make_textbox8(struct SHEET *sheet, int x0, int y0, int width, int height, int color);
+void putfonts8_ascii_sheet(struct SHEET *sheet, int x, int y, int color, int bg_color, char *s, int l);
+
+// console.c
+void console_task(struct SHEET *sheet, unsigned int total_memory);
+
+// file.c
+void file_read_fat(int *fat, unsigned char * img);
+void file_load_file(int cluster_no, int size, char *buffer, int *fat, char *img);

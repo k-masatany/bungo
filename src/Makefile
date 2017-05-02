@@ -32,9 +32,11 @@ KEYBORD_OBJ   	= $(BUILD_PATH)\keyboard.obj
 MOUSE_OBJ   	= $(BUILD_PATH)\mouse.obj
 MEMORY_OBJ   	= $(BUILD_PATH)\memory.obj
 SHEET_OBJ   	= $(BUILD_PATH)\sheet.obj
-SHEET_OBJ   	= $(BUILD_PATH)\sheet.obj
 TIMER_OBJ   	= $(BUILD_PATH)\timer.obj
 MULTITASK_OBJ  	= $(BUILD_PATH)\multitask.obj
+WINDOW_OBJ  	= $(BUILD_PATH)\window.obj
+CONSOLE_OBJ  	= $(BUILD_PATH)\console.obj
+FILE_OBJ  		= $(BUILD_PATH)\file.obj
 
 BOOTPACK_OBJ    = $(BUILD_PATH)\bootpack.obj
 BOOTPACK_BIM	= $(BUILD_PATH)\bootpack.bim
@@ -42,13 +44,16 @@ BOOTPACK_MAP	= $(BUILD_PATH)\bootpack.map
 BOOTPACK_HRB	= $(BUILD_PATH)\bootpack.hrb
 OBJS_BOOTPACK   = $(BOOTPACK_OBJ) $(NASKFUNK_OBJ) $(CHARSET_OBJ) $(GRAPHIC_OBJ) \
             	$(DESC_TBL_OBJ) $(INTERRUPT_OBJ) $(FIFO_OBJ) $(KEYBORD_OBJ) $(MOUSE_OBJ) \
-				$(MEMORY_OBJ) $(SHEET_OBJ) $(TIMER_OBJ) $(MULTITASK_OBJ)
+				$(MEMORY_OBJ) $(SHEET_OBJ) $(TIMER_OBJ) $(MULTITASK_OBJ) \
+				$(WINDOW_OBJ) $(CONSOLE_OBJ) $(FILE_OBJ)
 CHARSET_SRC		= hankaku.txt
 CHARSET_BINARY	= $(BUILD_PATH)\hankaku.bin
 CHARSET_OBJ		= $(BUILD_PATH)\hankaku.obj
 _CHARSET		= _hankaku
 BUNGO_SYS		= $(BUILD_PATH)\bungo.sys
 BUNGO_IMG		= $(BUILD_PATH)\bungo.img
+
+HALT_BIN		= $(BUILD_PATH)\halt.exe
 
 # Default Make image.
 default :
@@ -84,6 +89,7 @@ $(BUNGO_IMG): $(IPL_BINARY) $(BUNGO_SYS) Makefile
 		copy from:$(BUNGO_SYS) to:@: \
 		copy from:hankaku.txt to:@: \
 		copy from:bootpack.c to:@: \
+		copy from:$(HALT_BIN) to:@: \
 		imgout:$(BUNGO_IMG)
 
 $(NASKFUNK_OBJ):
