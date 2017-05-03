@@ -14,10 +14,12 @@
         GLOBAL	_load_tr
         GLOBAL	_asm_inthandler20, _asm_inthandler21
         GLOBAL  _asm_inthandler27, _asm_inthandler2c
+        GLOBAL	_asm_exec_api
         GLOBAL	_memtest_sub
-        GLOBAL	_farjmp
+        GLOBAL	_far_jmp, _far_call
         EXTERN	_inthandler20, _inthandler21
 		EXTERN	_inthandler27, _inthandler2c
+        EXTERN  _exec_api
 
 ; 以下は実際の関数
 [SECTION .text]		; オブジェクトファイルではこれを書いてからプログラムを書く
@@ -207,6 +209,19 @@ mts_fin:
 		POP		EDI
 		RET
 
-_farjmp:   ; void farjmp(int eip, int cs);
+_far_jmp:   ; void far_jmp(int eip, int cs);
         JMP     FAR[ESP+4]  ;eip, cs
         RET
+
+_far_call:  ; void far_call(int eip, int cs);
+        CALL    FAR[ESP+4]
+        RET
+
+_asm_exec_api:
+        STI
+        PUSHAD  ; 保存のためのPUSH
+        PUSHAD  ; exec_apiに渡すためのPUSH
+        CALL    _exec_api
+        ADD     ESP, 32     ; スタックに積んだデータを捨てる
+        POPAD
+        IRETD

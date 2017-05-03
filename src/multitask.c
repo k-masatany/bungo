@@ -166,7 +166,7 @@ void task_switch(void) {
     new_task = task_lv->tasks_head[task_lv->now];
     timer_set_time(task_timer, new_task->priority);
     if (new_task != now_task) {
-        farjmp(0, new_task->selector);
+        far_jmp(0, new_task->selector);
     }
     return;
 }
@@ -180,7 +180,7 @@ void task_sleep(struct TASK *task) {
             // 自分自身をSleepするので、後でタスクスイッチ
             task_switch_sub();
             now_task = task_now();  // 設定値での「現在のタスク」を教えてもらう
-            farjmp(0, now_task->selector);
+            far_jmp(0, now_task->selector);
         }
     }
     return;

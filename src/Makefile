@@ -16,6 +16,7 @@ IMGTOL   		= $(TOOL_PATH)\imgtol.com
 
 VPATH			= build
 BUILD_PATH		= .\build
+APP_PATH		= .\app
 IPL_SRC 		= ipl.nasm
 IPL_BINARY 		= $(BUILD_PATH)\ipl.bin
 IPL_LIST 		= $(BUILD_PATH)\ipl.lst
@@ -53,7 +54,7 @@ _CHARSET		= _hankaku
 BUNGO_SYS		= $(BUILD_PATH)\bungo.sys
 BUNGO_IMG		= $(BUILD_PATH)\bungo.img
 
-HALT_BIN		= $(BUILD_PATH)\halt.exe
+HALT_BIN		= $(APP_PATH)\hello.exe
 
 # Default Make image.
 default :

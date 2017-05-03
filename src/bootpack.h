@@ -39,7 +39,9 @@ void asm_inthandler21(void);
 void asm_inthandler27(void);
 void asm_inthandler2c(void);
 unsigned int memtest_sub(unsigned int start, unsigned int end);
-void farjmp(int eip, int cs);
+void far_jmp(int eip, int cs);
+void far_call(int eip, int cs);
+void asm_exec_api(void);
 
 // graphic.c
 void init_palette(void);
@@ -270,8 +272,26 @@ void make_textbox8(struct SHEET *sheet, int x0, int y0, int width, int height, i
 void putfonts8_ascii_sheet(struct SHEET *sheet, int x, int y, int color, int bg_color, char *s, int l);
 
 // console.c
+struct CONSOLE {
+    struct SHEET *sheet;
+    int cursor_x;
+    int cursor_y;
+    int cursor_c;
+};
 void console_task(struct SHEET *sheet, unsigned int total_memory);
+void console_putchar(struct CONSOLE *console, int chr, char move);
+void console_putstr(struct CONSOLE *console, char *str);
+void console_putnstr(struct CONSOLE *console, char *str, int n);
+void console_newline(struct CONSOLE *console);
+void console_run_command(char *command_line, struct CONSOLE *console, int *fat, unsigned int total_memory);
+void command_free(struct CONSOLE *console, unsigned int memtotal);
+void command_clear(struct CONSOLE *console);
+void command_ls(struct CONSOLE *console);
+void command_cat(struct CONSOLE *console, int *fat, char *command_line);
+int  command_app(struct CONSOLE *console, int *fat, char *command_line);
+void exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
 
 // file.c
 void file_read_fat(int *fat, unsigned char * img);
 void file_load_file(int cluster_no, int size, char *buffer, int *fat, char *img);
+struct FILE_INFO *file_search(char *name, struct FILE_INFO * f_info, int max);
