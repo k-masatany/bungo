@@ -268,9 +268,12 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
     struct MEMORY_MANAGER *memory_manager = (struct MEMORY_MANAGER *) MEMORY_MANAGER_ADDRESS;
     struct FILE_INFO *f_info;
     struct SEGMENT_DESCRIPTOR *gdt = (struct SEGMENT_DESCRIPTOR *) ADR_GDT;
+    struct TASK *task = task_now();
     char filename[16];
     char *p;
+    char *q;
     int i;
+    const int APP_MEMORY_SIZE = 64 *1024;
 
     // コマンドラインからファイル名を生成
     for (i = 0; i < 13; i++) {
@@ -296,10 +299,23 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
     if (f_info != 0) { // ファイルが見つかった場合
         /* ファイルが見つかった場合 */
         p = (char *) memman_alloc_4k(memory_manager, f_info->size);
+        q = (char *) memman_alloc_4k(memory_manager, APP_MEMORY_SIZE);
+        *((int *) 0xfe8) = (int) p;
         file_load_file(f_info->cluster_no, f_info->size, p, fat, (char *) (ADR_DISKIMG + 0x003e00));
-        set_segment_descriptor(gdt + 1003, f_info->size - 1, (int) p, AR_CODE32_ER);
-        far_call(0, 1003 * 8);
+        set_segment_descriptor(gdt + 1003, f_info->size - 1   , (int) p, AR_CODE32_ER + 0x60);
+        set_segment_descriptor(gdt + 1004, APP_MEMORY_SIZE - 1, (int) q, AR_DATA32_RW + 0x60);
+        if (f_info->size >= 8 && strncmp(p + 4, "Hari", 4) == 0) {
+            p[0] = 0xe8;
+            p[1] = 0x16;
+            p[2] = 0x00;
+            p[3] = 0x00;
+            p[4] = 0x00;
+            p[5] = 0xcb;
+        }
+
+        start_app(0, 1003 * 8, APP_MEMORY_SIZE, 1004 * 8, &(task->tss.esp0));
         memman_free_4k(memory_manager, (int) p, f_info->size);
+        memman_free_4k(memory_manager, (int) q, APP_MEMORY_SIZE);
         console_newline(console);
         return 1;
     }
@@ -307,18 +323,33 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
     return 0;
 }
 
-void exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax) {
+int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax) {
     struct CONSOLE *console = (struct CONSOLE *) *((int *) 0x0fec);
+    int cs_base = *((int *) 0xfe8);
+    struct TASK *task = task_now();
 
     if (edx == 1) {
         console_putchar(console, eax & 0xff, 1);
     }
     else if (edx == 2) {
-        console_putstr(console, (char *) ebx);
+        console_putstr(console, (char *) ebx + cs_base);
     }
     else if (edx == 3) {
-        console_putnstr(console, (char *) ebx, ecx);
+        console_putnstr(console, (char *) ebx + cs_base, ecx);
+    }
+    else if (edx == 4) {
+        return &(task->tss.esp0);
     }
 
-    return;
+    return 0;
+}
+
+int *inthandler0d(int *esp) {
+    struct CONSOLE *console = (struct CONSOLE *) *((int *) 0x0fec);
+    struct TASK *task = task_now();
+
+    console_putstr(console, "\n");
+    console_putstr(console, "INT 0D:\n");
+    console_putstr(console, "General Protected Exception.\n");
+    return &(task->tss.esp0);   // 異常終了させる
 }

@@ -10,7 +10,7 @@ MAKEFONT 		= $(TOOL_PATH)\makefont.exe
 BIN2OBJ  		= $(TOOL_PATH)\bin2obj.exe
 BIM2HRB  		= $(TOOL_PATH)\bim2hrb.exe
 GOLIB           = $(TOOL_PATH)\golib00.exe
-RULEFILE 		= $(TOOL_PATH)\bungo/bungo.rul
+RULEFILE 		= $(TOOL_PATH)\bungo\bungo.rul
 EDIMG    		= $(TOOL_PATH)\edimg.exe
 IMGTOL   		= $(TOOL_PATH)\imgtol.com
 
@@ -84,23 +84,40 @@ $(BOOTPACK_HRB): $(BOOTPACK_BIM) Makefile
 $(BUNGO_SYS): $(ASMHEAD_BINARY) $(BOOTPACK_HRB) Makefile
 	copy /B /Y $(ASMHEAD_BINARY)+$(BOOTPACK_HRB) $(BUNGO_SYS)
 
-$(BUNGO_IMG): $(IPL_BINARY) $(BUNGO_SYS) Makefile
+$(BUNGO_IMG): $(IPL_BINARY) $(BUNGO_SYS) hankaku.txt $(APP_PATH)\hello.exe \
+		$(APP_PATH)\app.exe $(APP_PATH)\crack_1.exe $(APP_PATH)\crack_2.exe Makefile
 	$(EDIMG)   imgin:$(TOOL_PATH)\fdimg0at.tek \
 		wbinimg src:$(IPL_BINARY) len:512 from:0 to:0 \
 		copy from:$(BUNGO_SYS) to:@: \
 		copy from:hankaku.txt to:@: \
-		copy from:bootpack.c to:@: \
-		copy from:$(HALT_BIN) to:@: \
+		copy from:$(APP_PATH)\hello.exe to:@: \
+		copy from:$(APP_PATH)\app.exe to:@: \
+		copy from:$(APP_PATH)\crack_1.exe to:@: \
+		copy from:$(APP_PATH)\crack_2.exe to:@: \
 		imgout:$(BUNGO_IMG)
 
 $(NASKFUNK_OBJ):
 	$(NASK) naskfunc.nasm $(BUILD_PATH)\naskfunc.obj $(BUILD_PATH)\naskfunc.lst
+
+$(APP_PATH)\hello.exe : $(APP_PATH)\hello.nasm Makefile
+	$(NASK) $(APP_PATH)\hello.nasm $(APP_PATH)\hello.exe $(APP_PATH)\hello.lst
+
+$(APP_PATH)\crack_2.exe : $(APP_PATH)\crack_2.nasm Makefile
+	$(NASK) $(APP_PATH)\crack_2.nasm $(APP_PATH)\crack_2.exe $(APP_PATH)\crack_2.lst
 
 # 一般規則
 %.obj:
 	$(CC1) -o $*.gasm $(*F).c
 	$(GAS2NASK) $*.gasm $*.nasm
 	$(NASK) $*.nasm $*.obj $*.lst
+
+%.exe:
+	$(CC1) -o $*.gasm $*.c
+	$(GAS2NASK) $*.gasm $*.nasm
+	$(NASK) $*.nasm $*.obj $*.app.lst
+	$(NASK) $(APP_PATH)\app_nask.nasm $(APP_PATH)\app_nask.obj $(APP_PATH)\app_nask.lst
+	$(OBJ2BIM) @$(RULEFILE) out:$*.bim map:$*.map $*.obj $(APP_PATH)\app_nask.obj
+	$(BIM2HRB) $*.bim $*.exe 0
 
 # ライブラリ生成用
 LIB_PATH    = .\startup
@@ -145,7 +162,10 @@ clean :
 	-del $(BUILD_PATH)\*.sys
 	-del $(LIB_PATH)\*.nasm
 	-del $(LIB_PATH)\*.gasm
-	-del $(LIB_PATH)\*.obj
+	-del $(APP_PATH)\*.gasm
+	-del $(APP_PATH)\*.obj
+	-del $(APP_PATH)\*.lst
+	-del $(APP_PATH)\*.exe
 
 src_only :
 	$(MAKE) clean

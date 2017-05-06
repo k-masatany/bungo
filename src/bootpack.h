@@ -34,6 +34,7 @@ void load_idtr(int limit, int addr);
 int load_cr0(void);
 void store_cr0(int cr0);
 void load_tr(int tr);
+void asm_inthandler0d(void);
 void asm_inthandler20(void);
 void asm_inthandler21(void);
 void asm_inthandler27(void);
@@ -41,6 +42,7 @@ void asm_inthandler2c(void);
 unsigned int memtest_sub(unsigned int start, unsigned int end);
 void far_jmp(int eip, int cs);
 void far_call(int eip, int cs);
+void start_app(int eip, int cs, int esp, int ds, int *tss_esp0);
 void asm_exec_api(void);
 
 // graphic.c
@@ -289,7 +291,8 @@ void command_clear(struct CONSOLE *console);
 void command_ls(struct CONSOLE *console);
 void command_cat(struct CONSOLE *console, int *fat, char *command_line);
 int  command_app(struct CONSOLE *console, int *fat, char *command_line);
-void exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
+int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
+int *inthandler0d(int *esp);
 
 // file.c
 void file_read_fat(int *fat, unsigned char * img);
