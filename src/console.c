@@ -189,6 +189,9 @@ void console_run_command(char *command_line, struct CONSOLE *console, int *fat, 
             sprintf(s, "%s : command not found\n", command_line);
             console_putstr(console, s);
         }
+        if (console->cursor_x > 8) {
+            console_newline(console);
+        }
     }
     return;
 }
@@ -273,7 +276,10 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
     char *p;
     char *q;
     int i;
-    const int APP_MEMORY_SIZE = 64 *1024;
+    int segment_size;
+    int data_size;
+    int esp;
+    int data_exe;
 
     // コマンドラインからファイル名を生成
     for (i = 0; i < 13; i++) {
@@ -299,24 +305,27 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
     if (f_info != 0) { // ファイルが見つかった場合
         /* ファイルが見つかった場合 */
         p = (char *) memman_alloc_4k(memory_manager, f_info->size);
-        q = (char *) memman_alloc_4k(memory_manager, APP_MEMORY_SIZE);
         *((int *) 0xfe8) = (int) p;
         file_load_file(f_info->cluster_no, f_info->size, p, fat, (char *) (ADR_DISKIMG + 0x003e00));
-        set_segment_descriptor(gdt + 1003, f_info->size - 1   , (int) p, AR_CODE32_ER + 0x60);
-        set_segment_descriptor(gdt + 1004, APP_MEMORY_SIZE - 1, (int) q, AR_DATA32_RW + 0x60);
-        if (f_info->size >= 8 && strncmp(p + 4, "Hari", 4) == 0) {
-            p[0] = 0xe8;
-            p[1] = 0x16;
-            p[2] = 0x00;
-            p[3] = 0x00;
-            p[4] = 0x00;
-            p[5] = 0xcb;
+        if (f_info->size >= 36 && strncmp(p + 4, "Hari", 4) == 0 && *p == 0x00) {
+            segment_size = *((int *) (p + 0x0000));
+            esp          = *((int *) (p + 0x000c));
+            data_size    = *((int *) (p + 0x0010));
+            data_exe     = *((int *) (p + 0x0014));
+            q = (char *) memman_alloc_4k(memory_manager, segment_size);
+            *((int *) 0x0fe8) = (int) q;
+            set_segment_descriptor(gdt + 1003, f_info->size - 1, (int) p, AR_CODE32_ER + 0x60);
+            set_segment_descriptor(gdt + 1004, segment_size - 1, (int) q, AR_DATA32_RW + 0x60);
+            for (i = 0; i < data_size; i++) {
+                q[esp + i] = p[data_exe + i];
+            }
+            start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
+            memman_free_4k(memory_manager, (int) q, segment_size);
         }
-
-        start_app(0, 1003 * 8, APP_MEMORY_SIZE, 1004 * 8, &(task->tss.esp0));
+        else {
+            console_putstr(console, "Error: Unknown Exec Format.");
+        }
         memman_free_4k(memory_manager, (int) p, f_info->size);
-        memman_free_4k(memory_manager, (int) q, APP_MEMORY_SIZE);
-        console_newline(console);
         return 1;
     }
     // ファイルが見つからなかった場合
@@ -325,20 +334,44 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
 
 int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax) {
     struct CONSOLE *console = (struct CONSOLE *) *((int *) 0x0fec);
-    int cs_base = *((int *) 0xfe8);
+    int ds_base = *((int *) 0xfe8);
     struct TASK *task = task_now();
+    struct SHEET_CONTROL *sheet_ctl = (struct SHEET_CONTROL *) *((int *) 0x0fe4);
+    struct SHEET *sheet;
+    int *reg = &eax + 1; // EAXの次の番地
+        // 保存のため、PUSHADを強引に書き換える
+        // reg[0] : EDI,  reg[1] : ESI,  reg[2] : EBP,  reg[3] : ESP
+        // reg[4] : EBX,  reg[5] : EDX,  reg[6] : ECX,  reg[7] : EAX
 
     if (edx == 1) {
         console_putchar(console, eax & 0xff, 1);
     }
     else if (edx == 2) {
-        console_putstr(console, (char *) ebx + cs_base);
+        console_putstr(console, (char *) ebx + ds_base);
     }
     else if (edx == 3) {
-        console_putnstr(console, (char *) ebx + cs_base, ecx);
+        console_putnstr(console, (char *) ebx + ds_base, ecx);
     }
     else if (edx == 4) {
         return &(task->tss.esp0);
+    }
+    else if (edx == 5) {
+        sheet = sheet_alloc(sheet_ctl);
+        sheet_set_buffer(sheet, (char *) ebx + ds_base, esi, edi, eax);
+        make_window8((char *) ebx + ds_base, esi, edi, (char *) ecx + ds_base, 0);
+        sheet_slide(sheet, 100, 50);
+        sheet_updown(sheet, 3);
+        reg[7] = (int) sheet;
+    }
+    else if (edx == 6) {
+        sheet = (struct SHEET *) ebx;
+        putfonts8_ascii(sheet->buffer, sheet->width, esi, edi, eax, (char *) ebp + ds_base);
+        sheet_refresh(sheet, esi, edi, esi + ecx * 8, edi + 16);
+    }
+    else if (edx == 7) {
+        sheet = (struct SHEET *) ebx;
+        boxfill8(sheet->buffer, sheet->width, ebp, eax, ecx, esi, edi);
+        sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
     }
 
     return 0;
@@ -347,9 +380,21 @@ int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int
 int *inthandler0d(int *esp) {
     struct CONSOLE *console = (struct CONSOLE *) *((int *) 0x0fec);
     struct TASK *task = task_now();
+    char s[48];
 
     console_putstr(console, "\n");
-    console_putstr(console, "INT 0D:\n");
-    console_putstr(console, "General Protected Exception.\n");
+    sprintf(s, "General Protected Exception. EIP:%08X\n", esp[11]);
+    console_putstr(console, s);
+    return &(task->tss.esp0);   // 異常終了させる
+}
+
+int *inthandler0c(int *esp) {
+    struct CONSOLE *console = (struct CONSOLE *) *((int *) 0x0fec);
+    struct TASK *task = task_now();
+    char s[48];
+
+    console_putstr(console, "\n");
+    sprintf(s, "Stack Exception. EIP:%08X\n", esp[11]);
+    console_putstr(console, s);
     return &(task->tss.esp0);   // 異常終了させる
 }

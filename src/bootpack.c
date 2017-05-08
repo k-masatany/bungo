@@ -25,6 +25,7 @@ void BungoMain(void)
     unsigned char *sheet_buffer_window, *sheet_buffer_console;
     struct TIMER *cursor_timer;
     struct TASK *task_a, *task_console;
+    struct CONSOLE *console;
     static char key_table[0x80] = {
         0,   0,   '1', '2', '3', '4', '5', '6', '7', '8', '9', '0', '-', '^', 0,   0,
 		'Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', '@', '[', 0,   0,   'A', 'S',
@@ -45,8 +46,19 @@ void BungoMain(void)
 		0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 		0,   0,   0,   '_', 0,   0,   0,   0,   0,   0,   0,   0,   0,   '|', 0,   0
 	};
+    static char control_key_table[0x80] = {
+           0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0, 0x1e, 0x1c,    0,
+		0x11, 0x17, 0x05, 0x12, 0x14, 0x19, 0x15, 0x09, 0x0f, 0x10, 0x00, 0x1b,    0,    0, 0x01, 0x13,
+		0x04, 0x06, 0x07, 0x08, 0x0a, 0x0b, 0x0c,    0,    0,    0,    0, 0x1d, 0x1a, 0x18, 0x03, 0x16,
+		0x02, 0x0e, 0x0d,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+		   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+		   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+		   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
+		   0,    0, 0x1f,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0
+	};
     int key_to = 0;
     int key_shift = 0;
+    int key_control = 0;
     int key_leds = (boot_info->leds >> 4) & 7;
     int key_command_wait = -1;
 
@@ -78,6 +90,7 @@ void BungoMain(void)
     task_run(task_a, 1, 0);
 
     sheet_ctl = sheet_control_init(memory_manager, boot_info->vram, boot_info->screen_x, boot_info->screen_y);
+    *((int *) 0x0fe4) = (int) sheet_ctl;
     // sheet back
     sheet_back   = sheet_alloc(sheet_ctl);
     sheet_buffer_back   = (unsigned char *)memman_alloc_4k(memory_manager, boot_info->screen_x * boot_info->screen_y);
@@ -149,7 +162,12 @@ void BungoMain(void)
             if(0x0100 <= data && data < 0x0200) {
                 if (data < 0x80 + 0x0100) {
                     if (key_shift == 0) {
-                        s[0] = key_table[data - 0x0100];
+                        if (key_control == 0) {
+                            s[0] = key_table[data - 0x0100];
+                        }
+                        else {
+                            s[0] = control_key_table[data - 0x0100];
+                        }
                     }
                     else {
                         s[0] = shift_key_table[data - 0x0100];
@@ -165,7 +183,7 @@ void BungoMain(void)
                     }
                 }
                 // 通常文字
-                if (s[0] != 0) {
+                if (s[0] > 0x20) {
                     if (key_to == 0) {
                         if (cursor_x < 128) {
                             s[1] = 0;
@@ -231,6 +249,14 @@ void BungoMain(void)
                 if (data == 0x0100 + 0xb6) {
                     key_shift &= ~2;
                 }
+                // 左コントロールON
+                if (data == 0x0100 + 0x1d) {
+                    key_control |= 1;
+                }
+                // 左コントロールOFF
+                if (data == 0x0100 + 0x9d) {
+                    key_control &= ~1;
+                }
                 // caps lock
                 if (data == 0x0100 + 0x3a) {
                     key_leds ^= 4;
@@ -248,6 +274,17 @@ void BungoMain(void)
                     key_leds ^= 1;
                     fifo32_put(&key_command, KEY_COMMAND_LED);
                     fifo32_put(&key_command, key_leds);
+                }
+                // Ctrl+c
+                if (s[0] == 0x03) {
+                    console = (struct CONSOLE *) *((int *) 0x0fec);
+                    console_putstr(console, "^C");
+                    if (task_console->tss.ss0 != 0) {
+                        io_cli();
+                        task_console->tss.eax = (int) &(task_console->tss.esp0);
+                        task_console->tss.eip = (int) asm_end_app;
+                        io_sti();
+                    }
                 }
                 // キーボードがデータを無事に受け取った
                 if (data == 0x0100 + 0xfa) {

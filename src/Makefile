@@ -84,16 +84,16 @@ $(BOOTPACK_HRB): $(BOOTPACK_BIM) Makefile
 $(BUNGO_SYS): $(ASMHEAD_BINARY) $(BOOTPACK_HRB) Makefile
 	copy /B /Y $(ASMHEAD_BINARY)+$(BOOTPACK_HRB) $(BUNGO_SYS)
 
-$(BUNGO_IMG): $(IPL_BINARY) $(BUNGO_SYS) hankaku.txt $(APP_PATH)\hello.exe \
-		$(APP_PATH)\app.exe $(APP_PATH)\crack_1.exe $(APP_PATH)\crack_2.exe Makefile
+$(BUNGO_IMG): $(IPL_BINARY) $(BUNGO_SYS) hankaku.txt $(APP_PATH)\hello.exe $(APP_PATH)\hello_2.exe \
+		$(APP_PATH)\app.exe $(APP_PATH)\window.exe Makefile
 	$(EDIMG)   imgin:$(TOOL_PATH)\fdimg0at.tek \
 		wbinimg src:$(IPL_BINARY) len:512 from:0 to:0 \
 		copy from:$(BUNGO_SYS) to:@: \
 		copy from:hankaku.txt to:@: \
 		copy from:$(APP_PATH)\hello.exe to:@: \
+		copy from:$(APP_PATH)\hello_2.exe to:@: \
 		copy from:$(APP_PATH)\app.exe to:@: \
-		copy from:$(APP_PATH)\crack_1.exe to:@: \
-		copy from:$(APP_PATH)\crack_2.exe to:@: \
+		copy from:$(APP_PATH)\window.exe to:@: \
 		imgout:$(BUNGO_IMG)
 
 $(NASKFUNK_OBJ):
@@ -101,6 +101,12 @@ $(NASKFUNK_OBJ):
 
 $(APP_PATH)\hello.exe : $(APP_PATH)\hello.nasm Makefile
 	$(NASK) $(APP_PATH)\hello.nasm $(APP_PATH)\hello.exe $(APP_PATH)\hello.lst
+
+$(APP_PATH)\hello_2.exe : $(APP_PATH)\hello_2.nasm Makefile
+	$(NASK) $(APP_PATH)\hello_2.nasm $(APP_PATH)\hello_2.obj $(APP_PATH)\hello_2.lst
+	$(NASK) $(APP_PATH)\app_nask.nasm $(APP_PATH)\app_nask.obj $(APP_PATH)\app_nask.lst
+	$(OBJ2BIM) @$(RULEFILE) out:$(APP_PATH)\hello_2.bim map:$(APP_PATH)\hello_2.map $(APP_PATH)\hello_2.obj $(APP_PATH)\app_nask.obj
+	$(BIM2HRB) $(APP_PATH)\hello_2.bim $(APP_PATH)\hello_2.exe 0
 
 $(APP_PATH)\crack_2.exe : $(APP_PATH)\crack_2.nasm Makefile
 	$(NASK) $(APP_PATH)\crack_2.nasm $(APP_PATH)\crack_2.exe $(APP_PATH)\crack_2.lst
@@ -165,6 +171,8 @@ clean :
 	-del $(APP_PATH)\*.gasm
 	-del $(APP_PATH)\*.obj
 	-del $(APP_PATH)\*.lst
+	-del $(APP_PATH)\*.bim
+	-del $(APP_PATH)\*.map
 	-del $(APP_PATH)\*.exe
 
 src_only :

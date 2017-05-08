@@ -34,6 +34,7 @@ void load_idtr(int limit, int addr);
 int load_cr0(void);
 void store_cr0(int cr0);
 void load_tr(int tr);
+void asm_inthandler0c(void);
 void asm_inthandler0d(void);
 void asm_inthandler20(void);
 void asm_inthandler21(void);
@@ -44,6 +45,7 @@ void far_jmp(int eip, int cs);
 void far_call(int eip, int cs);
 void start_app(int eip, int cs, int esp, int ds, int *tss_esp0);
 void asm_exec_api(void);
+void asm_end_app(void);
 
 // graphic.c
 void init_palette(void);
