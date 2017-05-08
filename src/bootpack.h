@@ -191,6 +191,7 @@ struct SHEET {
     int layer;                      // レイヤー：0が下層
     int flags;                      // 設定情報
     struct SHEET_CONTROL *control;  // 所属
+    struct TASK *task;              // タスク
 };
 struct SHEET_CONTROL {
     unsigned char *vram;            // Video RAM
@@ -281,6 +282,7 @@ struct CONSOLE {
     int cursor_x;
     int cursor_y;
     int cursor_c;
+    struct TIMER *timer;
 };
 void console_task(struct SHEET *sheet, unsigned int total_memory);
 void console_putchar(struct CONSOLE *console, int chr, char move);
@@ -294,6 +296,7 @@ void command_ls(struct CONSOLE *console);
 void command_cat(struct CONSOLE *console, int *fat, char *command_line);
 int  command_app(struct CONSOLE *console, int *fat, char *command_line);
 int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax);
+void exec_api_draw_line(struct SHEET *sheet, int x0, int y0, int x1, int y1, int color);
 int *inthandler0d(int *esp);
 
 // file.c

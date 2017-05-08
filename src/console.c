@@ -8,7 +8,6 @@ void console_task(struct SHEET *sheet, unsigned int total_memory) {
     int fifo_buffer[FIFO_BUF_SIZE];
     char command_line[32];
 
-    struct TIMER *timer;
     struct TASK *task = task_now();
     struct MEMORY_MANAGER *memory_manager = (struct MEMORY_MANAGER *) MEMORY_MANAGER_ADDRESS;
     int *fat = (int *) memman_alloc_4k(memory_manager, 4 * 2880);
@@ -21,9 +20,9 @@ void console_task(struct SHEET *sheet, unsigned int total_memory) {
     *((int *) 0x0fec) = (int) &console;
 
     fifo32_init(&task->fifo, FIFO_BUF_SIZE, fifo_buffer, task);
-    timer = timer_alloc();
-    timer_init(timer, &task->fifo, 1);
-    timer_set_time(timer, 50);
+    console.timer = timer_alloc();
+    timer_init(console.timer, &task->fifo, 1);
+    timer_set_time(console.timer, 50);
     file_read_fat(fat, (unsigned char *) (ADR_DISKIMG + 0x000200));
 
     // プロンプト表示
@@ -40,18 +39,18 @@ void console_task(struct SHEET *sheet, unsigned int total_memory) {
             io_sti();
             if (data <= 1) {    // カーソル用タイマ処理
                 if (data != 0) {
-                    timer_init(timer, &task->fifo, 0);
+                    timer_init(console.timer, &task->fifo, 0);
                     if (console.cursor_c >= 0) {
                         console.cursor_c = COL8_FFFFFF;
                     }
                 }
                 else {
-                    timer_init(timer, &task->fifo, 1);
+                    timer_init(console.timer, &task->fifo, 1);
                     if (console.cursor_c >= 0) {
                         console.cursor_c = COL8_000000;
                     }
                 }
-                timer_set_time(timer, 50);
+                timer_set_time(console.timer, 50);
             }
             if (data == 2) {    // カーソルON
                 console.cursor_c = COL8_FFFFFF;
@@ -272,6 +271,8 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
     struct FILE_INFO *f_info;
     struct SEGMENT_DESCRIPTOR *gdt = (struct SEGMENT_DESCRIPTOR *) ADR_GDT;
     struct TASK *task = task_now();
+    struct SHEET_CONTROL *sheet_ctl;
+    struct SHEET *sheet;
     char filename[16];
     char *p;
     char *q;
@@ -320,6 +321,14 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
                 q[esp + i] = p[data_exe + i];
             }
             start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
+            sheet_ctl = (struct SHEET_CONTROL *) *((int *) 0x0fe4);
+            for (i = 0; i < MAX_SHEETS; i++) {
+                sheet = &(sheet_ctl->sheets[i]);
+                if (sheet->flags != 0 && sheet->task == task) {
+                    // アプリが開きっぱなしのシートを発見
+                    sheet_free(sheet);
+                }
+            }
             memman_free_4k(memory_manager, (int) q, segment_size);
         }
         else {
@@ -336,6 +345,7 @@ int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int
     struct CONSOLE *console = (struct CONSOLE *) *((int *) 0x0fec);
     int ds_base = *((int *) 0xfe8);
     struct TASK *task = task_now();
+    int key_data;
     struct SHEET_CONTROL *sheet_ctl = (struct SHEET_CONTROL *) *((int *) 0x0fe4);
     struct SHEET *sheet;
     int *reg = &eax + 1; // EAXの次の番地
@@ -357,6 +367,7 @@ int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int
     }
     else if (edx == 5) {
         sheet = sheet_alloc(sheet_ctl);
+        sheet->task = task;
         sheet_set_buffer(sheet, (char *) ebx + ds_base, esi, edi, eax);
         make_window8((char *) ebx + ds_base, esi, edi, (char *) ecx + ds_base, 0);
         sheet_slide(sheet, 100, 50);
@@ -364,17 +375,138 @@ int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int
         reg[7] = (int) sheet;
     }
     else if (edx == 6) {
-        sheet = (struct SHEET *) ebx;
+        sheet = (struct SHEET *) (ebx & 0xfffffffe);
         putfonts8_ascii(sheet->buffer, sheet->width, esi, edi, eax, (char *) ebp + ds_base);
-        sheet_refresh(sheet, esi, edi, esi + ecx * 8, edi + 16);
+        if ((ebx & 1) == 0) {
+            sheet_refresh(sheet, esi, edi, esi + ecx * 8, edi + 16);
+        }
     }
     else if (edx == 7) {
-        sheet = (struct SHEET *) ebx;
+        sheet = (struct SHEET *) (ebx & 0xfffffffe);
         boxfill8(sheet->buffer, sheet->width, ebp, eax, ecx, esi, edi);
-        sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
+        if ((ebx & 1) == 0) {
+            sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
+        }
     }
-
+    else if (edx == 8) {
+        memman_init((struct MEMORY_MANAGER *) (ebx + ds_base));
+        ecx &= 0xfffffff0;  // 16バイト単位に
+        memman_free((struct MEMORY_MANAGER *) (ebx + ds_base), eax, ecx);
+    }
+    else if (edx == 9) {
+        ecx = (ecx + 0x0f) & 0xfffffff0; // 16バイト単位に切り上げる
+        reg[7] = memman_alloc((struct MEMORY_MANAGER *) (ebx + ds_base), ecx);
+    }
+    else if (edx == 10) {
+        ecx = (ecx + 0x0f) & 0xfffffff0; // 16バイト単位に切り上げる
+        memman_free((struct MEMORY_MANAGER *) (ebx + ds_base), eax, ecx);
+    }
+    else if (edx == 11) {
+        sheet = (struct SHEET *) (ebx & 0xfffffffe);
+        sheet->buffer[sheet->width * edi + esi] = eax;
+        if ((ebx & 1) == 0) {
+            sheet_refresh(sheet, esi, edi, esi + 1, edi +1);
+        }
+    }
+    else if (edx == 12) {
+        sheet = (struct SHEET *) ebx;
+        sheet_refresh(sheet, eax, ecx, esi, edi);
+    }
+    else if (edx == 13) {
+        sheet = (struct SHEET *) (ebx & 0xfffffffe);
+        exec_api_draw_line(sheet, eax, ecx, esi, edi, ebp);
+        if ((ebx & 1) == 0) {
+            sheet_refresh(sheet, eax, ecx, esi + 1, edi + 1);
+        }
+    }
+    else if (edx == 14) {
+        sheet_free((struct SHEET *) ebx);
+    }
+    else if (edx == 15) {
+        for (;;) {
+            io_cli();
+            if (fifo32_status(&(task->fifo)) == 0 ) {
+                if (eax != 0) {
+                    task_sleep(task);   // FIFOが空ならスリープ
+                }
+                else {
+                    io_sti();
+                    reg[7] = -1;
+                    return 0;
+                }
+            }
+            key_data = fifo32_get(&(task->fifo));
+            io_sti();
+            if (key_data <= 1) {    // カーソル用タイマ
+                // アプリ実行中はカーソルが出ないので
+                // 常に表示用の1を次の値にセットしておく
+                timer_init(console->timer, &(task->fifo), 1);
+                timer_set_time(console->timer, 50);
+            }
+            if (key_data == 2) {    // カーソルON
+                console->cursor_c = COL8_FFFFFF;
+            }
+            if (key_data == 2) {    // カーソルOFF
+                console->cursor_c = -1;
+            }
+            if (0x0100 <= key_data && key_data < 0x0200) {  // キーボードデータ（タスクA経由）
+                reg[7] = key_data - 0x0100;
+                return 0;
+            }
+        }
+    }
     return 0;
+}
+
+void exec_api_draw_line(struct SHEET *sheet, int x0, int y0, int x1, int y1, int color) {
+    int i;
+    int x, y;
+    int len;
+    int dx, dy;
+
+    dx = x1 - x0;
+	dy = y1 - y0;
+	x = x0 << 10;
+	y = y0 << 10;
+	if (dx < 0) {
+		dx = - dx;
+	}
+	if (dy < 0) {
+		dy = - dy;
+	}
+	if (dx >= dy) {
+		len = dx + 1;
+		if (x0 > x1) {
+			dx = -1024;
+		} else {
+			dx =  1024;
+		}
+		if (y0 <= y1) {
+			dy = ((y1 - y0 + 1) << 10) / len;
+		} else {
+			dy = ((y1 - y0 - 1) << 10) / len;
+		}
+	} else {
+		len = dy + 1;
+		if (y0 > y1) {
+			dy = -1024;
+		} else {
+			dy =  1024;
+		}
+		if (x0 <= x1) {
+			dx = ((x1 - x0 + 1) << 10) / len;
+		} else {
+			dx = ((x1 - x0 - 1) << 10) / len;
+		}
+	}
+
+	for (i = 0; i < len; i++) {
+		sheet->buffer[(y >> 10) * sheet->width + (x >> 10)] = color;
+		x += dx;
+		y += dy;
+	}
+
+	return;
 }
 
 int *inthandler0d(int *esp) {

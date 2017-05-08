@@ -35,6 +35,7 @@ struct SHEET *sheet_alloc(struct SHEET_CONTROL *sheet_ctl) {
             sheet = &sheet_ctl->sheets[i];
             sheet->flags    = SHEET_USE;   // 使用中に変更
             sheet->layer  = -1;            // 非表示
+            sheet->task = 0;               // 自動で閉じる機能を使わない
             return sheet;
         }
     }
