@@ -85,7 +85,7 @@ $(BUNGO_SYS): $(ASMHEAD_BINARY) $(BOOTPACK_HRB) Makefile
 	copy /B /Y $(ASMHEAD_BINARY)+$(BOOTPACK_HRB) $(BUNGO_SYS)
 
 $(BUNGO_IMG): $(IPL_BINARY) $(BUNGO_SYS) hankaku.txt $(APP_PATH)\hello.exe $(APP_PATH)\hello_2.exe \
-		$(APP_PATH)\app.exe $(APP_PATH)\window.exe $(APP_PATH)\walk.exe Makefile
+		$(APP_PATH)\app.exe $(APP_PATH)\window.exe $(APP_PATH)\walk.exe $(APP_PATH)\noodle.exe Makefile
 	$(EDIMG)   imgin:$(TOOL_PATH)\fdimg0at.tek \
 		wbinimg src:$(IPL_BINARY) len:512 from:0 to:0 \
 		copy from:$(BUNGO_SYS) to:@: \
@@ -95,6 +95,7 @@ $(BUNGO_IMG): $(IPL_BINARY) $(BUNGO_SYS) hankaku.txt $(APP_PATH)\hello.exe $(APP
 		copy from:$(APP_PATH)\app.exe to:@: \
 		copy from:$(APP_PATH)\window.exe to:@: \
 		copy from:$(APP_PATH)\walk.exe to:@: \
+		copy from:$(APP_PATH)\noodle.exe to:@: \
 		imgout:$(BUNGO_IMG)
 
 $(NASKFUNK_OBJ):

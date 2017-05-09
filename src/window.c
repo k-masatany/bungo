@@ -1,7 +1,7 @@
 // window関係
 #include "bootpack.h"
 
-void make_window8(unsigned char *buffer, int width, int height, char *title, char active) {
+void make_window8(unsigned char *buffer, int width, int height, char *title, char isActive) {
     boxfill8(buffer, width, COL8_C6C6C6, 0,         0,          width - 1, 0         );
 	boxfill8(buffer, width, COL8_FFFFFF, 1,         1,          width - 2, 1         );
 	boxfill8(buffer, width, COL8_C6C6C6, 0,         0,          0,         height - 1);
@@ -11,11 +11,11 @@ void make_window8(unsigned char *buffer, int width, int height, char *title, cha
 	boxfill8(buffer, width, COL8_C6C6C6, 2,         2,          width - 3, height - 3);
 	boxfill8(buffer, width, COL8_848484, 1,         height - 2, width - 2, height - 2);
 	boxfill8(buffer, width, COL8_000000, 0,         height - 1, width - 1, height - 1);
-    make_window_title(buffer, width, title, active);
+    make_window_title(buffer, width, title, isActive);
     return;
 }
 
-void make_window_title(unsigned char *buffer, int width, char *title, char active) {
+void make_window_title(unsigned char *buffer, int width, char *title, char isActive) {
     static char close_button[14][16] = {
         "OOOOOOOOOOOOOOO@",
 		"OQQQQQQQQQQQQQ$@",
@@ -35,7 +35,7 @@ void make_window_title(unsigned char *buffer, int width, char *title, char activ
     int x, y;
     char c, tc, tbc;
 
-    if (active != 0) {
+    if (isActive != 0) {
         tc  = COL8_FFFFFF;
         tbc = COL8_000084;
     }
@@ -88,4 +88,38 @@ void putfonts8_ascii_sheet(struct SHEET *sheet, int x, int y, int color, int bg_
     boxfill8(sheet->buffer, sheet->width, bg_color, x, y, x + (8*l) - 1, y + 15);
     putfonts8_ascii(sheet->buffer, sheet->width, x, y, color, s);
     sheet_refresh(sheet, x, y, x + (8*l), y + 16);
+}
+
+void change_window_title_color(struct SHEET *sheet, char isActive) {
+    int x, y, width = sheet->width;
+    char c;
+    char title_fgColor_old, title_bgColor_old, title_fgColor_new, title_bgColor_new;
+    char *buffer = sheet->buffer;
+
+    if (isActive != 0) {
+        title_fgColor_new = COL8_FFFFFF;
+        title_bgColor_new = COL8_000084;
+        title_fgColor_old = COL8_C6C6C6;
+        title_bgColor_old = COL8_848484;
+    }
+    else {
+        title_fgColor_new = COL8_C6C6C6;
+        title_bgColor_new = COL8_848484;
+        title_fgColor_old = COL8_FFFFFF;
+        title_bgColor_old = COL8_000084;
+    }
+    for (y = 3; y <= 20; y++) {
+        for (x = 3; x <= width - 4; x++) {
+            c = buffer[y * width + x];
+            if (c == title_fgColor_old && x <= width - 22) {
+                c = title_fgColor_new;
+            }
+            else if (c == title_bgColor_old) {
+                c = title_bgColor_new;
+            }
+            buffer[y * width + x] = c;
+        }
+    }
+    sheet_refresh(sheet, 3, 3, width, 21);
+    return;
 }

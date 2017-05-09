@@ -5,6 +5,9 @@
 
 #define KEY_COMMAND_LED		0xed
 
+int switch_sheet(struct SHEET *active_sheet, struct SHEET *sheet_window, int cursor_c);
+int leave_sheet(struct SHEET *active_sheet, struct SHEET *sheet_window, int cursor_c, int cursor_x);
+
 void BungoMain(void)
 {
     struct BOOT_INFO *boot_info = (struct BOOT_INFO *) ADR_BOOTINFO;
@@ -18,9 +21,13 @@ void BungoMain(void)
     int mouse_x, mouse_y;
 	int cursor_x, cursor_c;
     int data;
+    int i, x, y;
+    int move_x = -1, move_y = -1;
+    struct SHEET *sheet = 0;
     struct MEMORY_MANAGER *memory_manager = (struct MEMORY_MANAGER *) MEMORY_MANAGER_ADDRESS;
     struct SHEET_CONTROL *sheet_ctl;
     struct SHEET *sheet_back, *sheet_mouse, *sheet_window, *sheet_console;
+    struct SHEET *active_sheet;
     unsigned char *sheet_buffer_back, sheet_buffer_mouse[160];
     unsigned char *sheet_buffer_window, *sheet_buffer_console;
     struct TIMER *cursor_timer;
@@ -56,7 +63,6 @@ void BungoMain(void)
 		   0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,
 		   0,    0, 0x1f,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0,    0
 	};
-    int key_to = 0;
     int key_shift = 0;
     int key_control = 0;
     int key_leds = (boot_info->leds >> 4) & 7;
@@ -128,6 +134,9 @@ void BungoMain(void)
     *((int *) (task_console->tss.esp + 4)) = (int) sheet_console;
     *((int *) (task_console->tss.esp + 8)) = total_memory;
     task_run(task_console, 2, 2);
+    active_sheet = sheet_window;
+    sheet_console->task = task_console;
+    sheet_console->flags |= SHEET_ACTIVE;
 
     sheet_slide(sheet_back, 0, 0);
     sheet_slide(sheet_console, 32, 4);
@@ -158,6 +167,10 @@ void BungoMain(void)
         else {
             data = fifo32_get(&fifo);
             io_sti();
+            if (active_sheet->flags == 0) {    // アクティブウィンドウが閉じられた
+                active_sheet = sheet_ctl->sheets_head[sheet_ctl->top - 1];
+                cursor_c = switch_sheet(active_sheet, sheet_window, cursor_c);
+            }
             // キーボード操作
             if(0x0100 <= data && data < 0x0200) {
                 if (data < 0x80 + 0x0100) {
@@ -184,7 +197,7 @@ void BungoMain(void)
                 }
                 // 通常文字
                 if (s[0] > 0x20) {
-                    if (key_to == 0) {
+                    if (active_sheet == sheet_window) {
                         if (cursor_x < 128) {
                             s[1] = 0;
                             putfonts8_ascii_sheet(sheet_window, cursor_x, 28, COL8_000000, COL8_FFFFFF, s, 1);
@@ -192,46 +205,41 @@ void BungoMain(void)
                         }
                     }
                     else {  // コンソールへ
-                        fifo32_put(&task_console->fifo, s[0] + 0x0100);
+                        fifo32_put(&(active_sheet->task->fifo), s[0] + 0x0100);
                     }
                 }
                 // BS
                 if (data == 0x0100 + 0x0e) {
-                    if (key_to == 0) {
+                    if (active_sheet == sheet_window) {
                         if (cursor_x > 8) {
                             putfonts8_ascii_sheet(sheet_window, cursor_x, 28, COL8_000000, COL8_FFFFFF, " ", 1);
                             cursor_x -= 8;
                         }
                     }
                     else {  // コンソールへ
-                        fifo32_put(&task_console->fifo, 8 + 0x0100);
+                        fifo32_put(&(active_sheet->task->fifo), 8 + 0x0100);
                     }
                 }
                 // TAB
                 if (data == 0x0100 + 0x0f) {
-                    if (key_to == 0) {
-                        key_to = 1;
-                        make_window_title(sheet_buffer_window,  sheet_window->width,  "task_a",  0);
-                        make_window_title(sheet_buffer_console, sheet_console->width, "console", 1);
-                        cursor_c = -1;  // カーソルを消す
-                        boxfill8(sheet_window->buffer, sheet_window->width, COL8_FFFFFF, cursor_x, 28, cursor_x + 7, 43);
-                        fifo32_put(&task_console->fifo, 2);
+                    cursor_c = leave_sheet(active_sheet, sheet_window, cursor_c, cursor_x);
+                    i = active_sheet->layer - 1;
+                    if (i == 0) {
+                        i = sheet_ctl->top - 1;
                     }
-                    else {
-                        key_to = 0;
-                        make_window_title(sheet_buffer_window,  sheet_window->width,  "task_a",  1);
-                        make_window_title(sheet_buffer_console, sheet_console->width, "console", 0);
-                        cursor_c = COL8_000000; // カーソルを出す
-                        fifo32_put(&task_console->fifo, 3);
-                    }
-                    sheet_refresh(sheet_window,  0, 0, sheet_window->width,  21);
-                    sheet_refresh(sheet_console, 0, 0, sheet_console->width, 21);
+                    active_sheet = sheet_ctl->sheets_head[i];
+
+                    cursor_c = switch_sheet(active_sheet, sheet_window, cursor_c);
                 }
                 // Enter
                 if (data == 0x0100 + 0x1c) {
-                    if (key_to != 0) {
-                        fifo32_put(&task_console->fifo, 0x0a + 0x0100); // LF
+                    if (active_sheet != sheet_window) {
+                        fifo32_put(&(active_sheet->task->fifo), 0x0a + 0x0100); // LF
                     }
+                }
+                // F6
+                if (data == 0x0100 + 0x40) {
+                    sheet_updown(sheet_ctl->sheets_head[1], sheet_ctl->top - 1);
                 }
                 // 左シフトON
                 if (data == 0x0100 + 0x2a) {
@@ -320,8 +328,52 @@ void BungoMain(void)
                         mouse_y = boot_info->screen_y - 1;
                     }
                     sheet_slide(sheet_mouse, mouse_x, mouse_y);
-                    if ((mouse_decoder.button & 0x01) != 0) {
-                        sheet_slide(sheet_window, mouse_x, mouse_y);
+                    if ((mouse_decoder.button & 0x01) != 0) {   // 左クリック
+                        if (move_x < 0) {   // 通常モード
+                            // 上のシートから順番にマウスがクリックしたシートを探す
+                            // sheet_ctl->topはマウスカーソル、0は背景なので検索対象から外す
+                            for (i = sheet_ctl->top - 1; i > 0; i-- ) {
+                                sheet = sheet_ctl->sheets_head[i];
+                                x = mouse_x - sheet->x;
+                                y = mouse_y - sheet->y;
+                                if (0 <= x && x < sheet->width && 0 <= y && y < sheet->height) {
+                                    if (sheet->buffer[y * sheet->width + x] != sheet->color_invisible) {
+                                        sheet_updown(sheet, sheet_ctl->top - 1);
+                                        if (sheet != active_sheet) {
+                                            cursor_c = leave_sheet(active_sheet, sheet_window, cursor_c, cursor_x);
+                                            active_sheet = sheet;
+                                            cursor_c = switch_sheet(active_sheet, sheet_window, cursor_c);
+                                        }
+                                        if (3 <= x && x < sheet->width - 3 && 3 <= y && y < 21) {  // ウィンドウ移動
+                                            move_x = mouse_x;
+                                            move_y = mouse_y;
+                                        }
+                                        if (sheet->width - 21 <= x && x < sheet->width - 5 && 5 <= y && y < 19) { // 閉じるボタン
+                                            if ((sheet->flags & SHEET_AUTO_CLOSE) != 0) {
+                                                console = (struct CONSOLE *) *((int *) 0x0fec);
+                                                console_putstr(console, "^C(mouse)\n");
+                                                io_cli();
+                                                task_console->tss.eax = (int) &(task_console->tss.esp0);
+                                                task_console->tss.eip = (int) asm_end_app;
+                                                io_sti();
+                                            }
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        else {  // ウィンドウ移動モード
+                            x = mouse_x - move_x;
+                            y = mouse_y - move_y;
+                            sheet_slide(sheet, sheet->x + x, sheet->y + y);
+                            // 移動後の座標に更新
+                            move_x = mouse_x;
+                            move_y = mouse_y;
+                        }
+                    }
+                    else {
+                        move_x = -1;
                     }
                 }
             }
@@ -347,4 +399,31 @@ void BungoMain(void)
             }
         }
     }
+}
+
+int switch_sheet(struct SHEET *active_sheet, struct SHEET *sheet_window, int cursor_c) {
+    change_window_title_color(active_sheet, 1);
+    if (active_sheet == sheet_window) {
+        cursor_c = COL8_000000;     // カーソルを出す
+    }
+    else {
+        if ((active_sheet->flags & SHEET_ACTIVE) != 0 ) {
+            fifo32_put(&(active_sheet->task->fifo), 2);     // コンソールのカーソルOFF
+        }
+    }
+    return cursor_c;
+}
+
+int leave_sheet(struct SHEET *active_sheet, struct SHEET *sheet_window, int cursor_c, int cursor_x) {
+    change_window_title_color(active_sheet, 0);
+    if (active_sheet == sheet_window) {
+        cursor_c = -1;  // カーソルを消す
+        boxfill8(sheet_window->buffer, sheet_window->width, COL8_FFFFFF, cursor_x, 28, cursor_x + 7, 43);
+    }
+    else {
+        if ((active_sheet->flags & SHEET_ACTIVE) != 0) {
+            fifo32_put(&(active_sheet->task->fifo), 3);     // コンソールのカーソルOFF
+        }
+    }
+    return cursor_c;
 }

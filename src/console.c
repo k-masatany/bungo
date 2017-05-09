@@ -324,11 +324,13 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
             sheet_ctl = (struct SHEET_CONTROL *) *((int *) 0x0fe4);
             for (i = 0; i < MAX_SHEETS; i++) {
                 sheet = &(sheet_ctl->sheets[i]);
-                if (sheet->flags != 0 && sheet->task == task) {
+                if ((sheet->flags & (SHEET_AUTO_CLOSE | SHEET_USE)) == (SHEET_AUTO_CLOSE | SHEET_USE)
+                        && sheet->task == task) {
                     // アプリが開きっぱなしのシートを発見
                     sheet_free(sheet);
                 }
             }
+            timer_cancel_all(&(task->fifo));
             memman_free_4k(memory_manager, (int) q, segment_size);
         }
         else {
@@ -368,6 +370,7 @@ int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int
     else if (edx == 5) {
         sheet = sheet_alloc(sheet_ctl);
         sheet->task = task;
+        sheet->flags |= SHEET_AUTO_CLOSE;
         sheet_set_buffer(sheet, (char *) ebx + ds_base, esi, edi, eax);
         make_window8((char *) ebx + ds_base, esi, edi, (char *) ecx + ds_base, 0);
         sheet_slide(sheet, 100, 50);
@@ -449,11 +452,24 @@ int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int
             if (key_data == 2) {    // カーソルOFF
                 console->cursor_c = -1;
             }
-            if (0x0100 <= key_data && key_data < 0x0200) {  // キーボードデータ（タスクA経由）
+            if (key_data >= 0x0100) {  // キーボードデータ（タスクA経由）
                 reg[7] = key_data - 0x0100;
                 return 0;
             }
         }
+    }
+    else if (edx == 16) {
+        reg[7] = (int) timer_alloc();
+        ((struct TIMER *) reg[7])->flags2 = 1;   // タイマの自動停止ON
+    }
+    else if (edx == 17) {
+        timer_free((struct TIMER *) ebx);
+    }
+    else if (edx == 18) {
+        timer_init((struct TIMER *) ebx, &(task->fifo), eax + 0x0100);
+    }
+    else if (edx == 19) {
+        timer_set_time((struct TIMER *) ebx, eax);
     }
     return 0;
 }

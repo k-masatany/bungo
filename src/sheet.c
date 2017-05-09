@@ -1,8 +1,6 @@
 // マウスやウィンドウの重ね合わせ処理関係
 #include "bootpack.h"
 
-#define SHEET_USE		1
-
 struct SHEET_CONTROL *sheet_control_init(struct MEMORY_MANAGER *mem_manager, unsigned char *vram, int screen_x, int screen_y ) {
     struct SHEET_CONTROL *sheet_ctl;
     int i;

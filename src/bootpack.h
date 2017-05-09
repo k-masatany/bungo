@@ -180,7 +180,10 @@ unsigned int memman_alloc_4k(struct MEMORY_MANAGER *manager, unsigned int size);
 int memman_free_4k(struct MEMORY_MANAGER *manager, unsigned int address, unsigned int size);
 
 // sheet.c
-#define MAX_SHEETS      256
+#define MAX_SHEETS          256
+#define SHEET_USE		    0x01
+#define SHEET_AUTO_CLOSE    0x10
+#define SHEET_ACTIVE        0x20
 struct SHEET {
     unsigned char *buffer;          // 描画内容を記憶しているバッファへのポインタ
     int width;                      // x方向長さ
@@ -212,9 +215,13 @@ void sheet_free(struct SHEET *sheet);
 
 // timer.c
 #define MAX_TIMER       512
+#define TIMER_FLAGS_ALLOC   0x01   // 確保した状態
+#define TIMER_FLAGS_USING   0x02   // タイマ作動中
+#define TIMER_AUTO_CLOSE    0x04   // アプリ終了時に自動キャンセル
 struct TIMER {
     unsigned int timeout;
     unsigned int flags;
+    unsigned int flags2;
     struct FIFO32 *fifo;
     int data;
     struct TIMER *next;
@@ -230,6 +237,8 @@ struct TIMER *timer_alloc(void);
 void timer_free(struct TIMER *timer);
 void timer_init(struct TIMER *timer, struct FIFO32 *fifo, int data);
 void timer_set_time(struct TIMER *timer, unsigned int timeout);
+int timer_cancel(struct TIMER *timer);
+void timer_cancel_all(struct FIFO32 *fifo);
 void inthandler20(int *esp);
 
 // multitask.c
@@ -271,10 +280,11 @@ void task_sleep(struct TASK *task);
 struct TASK *task_now(void);
 
 // window.c
-void make_window8(unsigned char *buffer, int width, int height, char *title, char active);
-void make_window_title(unsigned char *buffer, int width, char *title, char active);
+void make_window8(unsigned char *buffer, int width, int height, char *title, char isActive);
+void make_window_title(unsigned char *buffer, int width, char *title, char isActive);
 void make_textbox8(struct SHEET *sheet, int x0, int y0, int width, int height, int color);
 void putfonts8_ascii_sheet(struct SHEET *sheet, int x, int y, int color, int bg_color, char *s, int l);
+void change_window_title_color(struct SHEET *sheet, char isActive);
 
 // console.c
 struct CONSOLE {
