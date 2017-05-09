@@ -259,6 +259,8 @@ struct TASK {
     int priority;
     struct TSS32 tss;
     struct FIFO32 fifo;
+    struct CONSOLE *console;
+    int ds_base;
 };
 struct TASK_LEVEL {
     int running;    // 動作しているタスクの数

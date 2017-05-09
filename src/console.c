@@ -5,7 +5,6 @@
 
 void console_task(struct SHEET *sheet, unsigned int total_memory) {
     int data;
-    int fifo_buffer[FIFO_BUF_SIZE];
     char command_line[32];
 
     struct TASK *task = task_now();
@@ -17,9 +16,8 @@ void console_task(struct SHEET *sheet, unsigned int total_memory) {
     console.cursor_x =  8;
     console.cursor_y = 28;
     console.cursor_c = -1;
-    *((int *) 0x0fec) = (int) &console;
+    task->console =  &console;
 
-    fifo32_init(&task->fifo, FIFO_BUF_SIZE, fifo_buffer, task);
     console.timer = timer_alloc();
     timer_init(console.timer, &task->fifo, 1);
     timer_set_time(console.timer, 50);
@@ -62,7 +60,7 @@ void console_task(struct SHEET *sheet, unsigned int total_memory) {
             }
             // キーボードデータ（タスクA経由）処理
             if (0x0100 <= data && data < 0x0200) {
-                if (data == 8 + 0x0100) {   // BS
+                if (data == 0x08 + 0x0100) {   // BS
                     if (console.cursor_x > 16) {
                         // カーソルをスペースで消し、カーソルを1つ戻す
                         console_putchar(&console, ' ', 0);
@@ -79,7 +77,7 @@ void console_task(struct SHEET *sheet, unsigned int total_memory) {
                     console_putchar(&console, '>', 1);
                 }
                 else {
-                    if (console.cursor_x < 240) {
+                    if (0x1f < (data - 0x0100) && console.cursor_x < 240) { // 制御文字は表示しない
                         // 1文字表示してから、カーソルを1つ進める
                         command_line[console.cursor_x / 8 - 2] = data - 0x0100;
                         console_putchar(&console, data - 0x0100, 1);
@@ -314,13 +312,13 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
             data_size    = *((int *) (p + 0x0010));
             data_exe     = *((int *) (p + 0x0014));
             q = (char *) memman_alloc_4k(memory_manager, segment_size);
-            *((int *) 0x0fe8) = (int) q;
-            set_segment_descriptor(gdt + 1003, f_info->size - 1, (int) p, AR_CODE32_ER + 0x60);
-            set_segment_descriptor(gdt + 1004, segment_size - 1, (int) q, AR_DATA32_RW + 0x60);
+            task->ds_base = (int) q;
+            set_segment_descriptor(gdt + (task->selector / 8) + 1000, f_info->size - 1, (int) p, AR_CODE32_ER + 0x60);
+            set_segment_descriptor(gdt + (task->selector / 8) + 2000, segment_size - 1, (int) q, AR_DATA32_RW + 0x60);
             for (i = 0; i < data_size; i++) {
                 q[esp + i] = p[data_exe + i];
             }
-            start_app(0x1b, 1003 * 8, esp, 1004 * 8, &(task->tss.esp0));
+            start_app(0x1b, task->selector + 1000*8, esp, task->selector + 2000*8, &(task->tss.esp0));
             sheet_ctl = (struct SHEET_CONTROL *) *((int *) 0x0fe4);
             for (i = 0; i < MAX_SHEETS; i++) {
                 sheet = &(sheet_ctl->sheets[i]);
@@ -344,10 +342,11 @@ int  command_app(struct CONSOLE *console, int *fat, char *command_line) {
 }
 
 int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int eax) {
-    struct CONSOLE *console = (struct CONSOLE *) *((int *) 0x0fec);
-    int ds_base = *((int *) 0xfe8);
     struct TASK *task = task_now();
+    struct CONSOLE *console = task->console;
+    int ds_base = task->ds_base;
     int key_data;
+    int d;
     struct SHEET_CONTROL *sheet_ctl = (struct SHEET_CONTROL *) *((int *) 0x0fe4);
     struct SHEET *sheet;
     int *reg = &eax + 1; // EAXの次の番地
@@ -373,8 +372,8 @@ int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int
         sheet->flags |= SHEET_AUTO_CLOSE;
         sheet_set_buffer(sheet, (char *) ebx + ds_base, esi, edi, eax);
         make_window8((char *) ebx + ds_base, esi, edi, (char *) ecx + ds_base, 0);
-        sheet_slide(sheet, 100, 50);
-        sheet_updown(sheet, 3);
+        sheet_slide(sheet, (sheet_ctl->screen_x - esi) / 2, (sheet_ctl->screen_y - edi) / 2);
+        sheet_updown(sheet, sheet_ctl->top);    // マウスと同じレイヤ（マウスはこの上のレイヤになる）
         reg[7] = (int) sheet;
     }
     else if (edx == 6) {
@@ -471,6 +470,20 @@ int *exec_api(int edi, int esi, int ebp, int esp, int ebx, int edx, int ecx, int
     else if (edx == 19) {
         timer_set_time((struct TIMER *) ebx, eax);
     }
+    else if (edx == 20) {
+        if (eax == 0) {  // mute
+            d = io_in8(0x61);
+            io_out8(0x61, d & 0x0d);
+        }
+        else {
+            d = 1193180000 / eax;
+            io_out8(0x43, 0xb6);
+            io_out8(0x42, d & 0xff);
+            io_out8(0x42, d >> 8);
+            d = io_in8(0x61);
+            io_out8(0x61, (d | 0x03) & 0x0f);
+        }
+    }
     return 0;
 }
 
@@ -526,8 +539,8 @@ void exec_api_draw_line(struct SHEET *sheet, int x0, int y0, int x1, int y1, int
 }
 
 int *inthandler0d(int *esp) {
-    struct CONSOLE *console = (struct CONSOLE *) *((int *) 0x0fec);
     struct TASK *task = task_now();
+    struct CONSOLE *console = (struct CONSOLE *) task->console;
     char s[48];
 
     console_putstr(console, "\n");
@@ -537,8 +550,8 @@ int *inthandler0d(int *esp) {
 }
 
 int *inthandler0c(int *esp) {
-    struct CONSOLE *console = (struct CONSOLE *) *((int *) 0x0fec);
     struct TASK *task = task_now();
+    struct CONSOLE *console = (struct CONSOLE *) task->console;
     char s[48];
 
     console_putstr(console, "\n");
